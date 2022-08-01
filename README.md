@@ -1,2 +1,2 @@
 # TodMapper
-A tool for genome anchoring.
+TodMapper is a tool for genome anchoring.
