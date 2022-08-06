@@ -277,7 +277,7 @@ int main_aln(int argc, char **argv)
 	FILE *fp;
 	char *alnfn;
 	b4i c, ksize, wsize, bsize, ver, bi;
-	u8i qrybin_size, ui;
+	u8i mask[4], qrybin_size, ui, uj;
 	struct MINIMIZER_V *minimizer_v;
 	struct QRYBIN_V **qrybin_v;
 	//
@@ -310,6 +310,7 @@ int main_aln(int argc, char **argv)
 		}
 	}
 	//
+	mask[3] = (1ULL << 32) - 1;
 	minimizer_v = (struct MINIMIZER_V *)malloc(sizeof(struct MINIMIZER_V));
 	minimizer_v->size = minimizer_v->cap = 0;
 	//
@@ -325,8 +326,17 @@ int main_aln(int argc, char **argv)
 	bi = 0;
 	readseq_filereader(fr, seq);
 	qrybin_size = seq->seq->size;
-	qrybin_size = qrybin_size - (qrybin_size % bsize);
-	qrybin_size = qrybin_size / bsize;
+	if(qrybin_size % bsize == 0)
+	{
+		qrybin_size = qrybin_size - (qrybin_size % bsize);
+		qrybin_size = qrybin_size / bsize;
+	}
+	else
+	{
+		qrybin_size = qrybin_size - (qrybin_size % bsize);
+		qrybin_size = qrybin_size / bsize;
+		qrybin_size = qrybin_size + 1;
+	}
 	qrybin_v = (struct QRYBIN_V **)calloc(qrybin_size, sizeof(struct QRYBIN_V *));
 	for(ui = 0; ui < qrybin_size; ui++)
 	{
@@ -337,6 +347,34 @@ int main_aln(int argc, char **argv)
 	bi++;
 	free_biosequence(seq);
 	close_filereader(fr);
+	//
+	if(alnfn)
+	{
+		fp = fopen(alnfn, "w");
+		fprintf(fp, "minimizer_v\n");
+		for(ui = 0; ui < minimizer_v->size; ui++)
+		{
+			uj = minimizer_v->buffer[ui].s;
+			fprintf(fp, "%llu ", uj);
+			uj = (minimizer_v->buffer[ui].ip >> 32) & mask[3];
+			fprintf(fp, "%llu ", uj);
+			uj = minimizer_v->buffer[ui].ip & mask[3];
+			fprintf(fp, "%llu\n", uj);
+		}
+		for(ui = 0; ui < qrybin_size; ui++)
+		{
+			fprintf(fp, "qrybin_v[%llu]\n", ui);
+			for(uj = 0; uj < qrybin_v[ui]->size; uj++)
+			{
+				fprintf(fp, "%llu\n", qrybin_v[ui]->buffer[uj].s);
+			}
+		}
+		fclose(fp);
+	}
+	else
+	{
+		return usage_aln();
+	}
 	//
 	free(minimizer_v->buffer);
 	free(minimizer_v);

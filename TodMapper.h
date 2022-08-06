@@ -373,9 +373,9 @@ void getqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, struct
 	struct MINIMIZER_T pre_elm[64], min_elm;
 	struct QRYBIN_T qrybin_t;
 	//
-	for(bi = 0; bi < 128; bi++)
+	for(bj = 0; bj < 128; bj++)
 	{
-		nucleobase[bi] = 4;
+		nucleobase[bj] = 4;
 	}
 	nucleobase[65] = nucleobase[97] = 0;
 	nucleobase[67] = nucleobase[99] = 1;
