@@ -6,7 +6,7 @@ int usage_idx()
         "usage: TodMapper idx [options] <input file>\n"
         " -o <string> index file, [NULL]\n"
         " -k <int>    kmer size, [15]\n"
-        " -w <int>    window size, [15]\n"
+        " -w <int>    window size, [10]\n"
         " -v          verbose\n"
         "\n"
         "for example: index human reference genome GRCh38p13.fa\n"
@@ -30,7 +30,7 @@ int main_idx(int argc, char **argv)
 	//
 	idxfn = NULL;
 	ksize = 15;
-	wsize = 15;
+	wsize = 10;
         ver = 0;
         while((c = getopt(argc, argv, "ho:k:w:v")) != -1)
         {
@@ -256,11 +256,95 @@ int main_idx(int argc, char **argv)
 
 int usage_aln()
 {
+	fprintf(stdout,
+	"usage: TodMapper aln [options] <input file>\n"
+	" -o <string> index file, [NULL]\n"
+	" -k <int>    kmer size, [15]\n"
+	" -w <int>    window size, [10]\n"
+	" -b <int>    bin size, [256]\n"
+	" -v          verbose\n"
+	"\n"
+	"for example: align multi sequence qry.fa\n"
+	"TodMapper aln -o qry.aln qry.fa\n"
+	);
         return 1;
 }
 
-int main_aln()
+int main_aln(int argc, char **argv)
 {
+	FileReader *fr;
+	BioSequence *seq;
+	FILE *fp;
+	char *alnfn;
+	b4i c, ksize, wsize, bsize, ver, bi;
+	u8i qrybin_size, ui;
+	struct MINIMIZER_V *minimizer_v;
+	struct QRYBIN_V **qrybin_v;
+	//
+	alnfn = NULL;
+	ksize = 15;
+	wsize = 10;
+	bsize = 256;
+	ver = 0;
+	while((c = getopt(argc, argv, "ho:k:w:b:v")) != -1)
+	{
+		switch(c)
+		{
+			case 'o':
+				alnfn = optarg;
+				break;
+			case 'k':
+				ksize = atoi(optarg);
+				break;
+			case 'w':
+				wsize = atoi(optarg);
+				break;
+			case 'b':
+				bsize = atoi(optarg);
+				break;
+			case 'v':
+				ver++;
+				break;
+			default:
+				return usage_aln();
+		}
+	}
+	//
+	minimizer_v = (struct MINIMIZER_V *)malloc(sizeof(struct MINIMIZER_V));
+	minimizer_v->size = minimizer_v->cap = 0;
+	//
+	if(optind < argc)
+	{
+		fr = open_all_filereader(1, argv + argc - 1, 0);
+	}
+	else
+	{
+		return usage_aln();
+	}
+	seq = init_biosequence();
+	bi = 0;
+	readseq_filereader(fr, seq);
+	qrybin_size = seq->seq->size;
+	qrybin_size = qrybin_size - (qrybin_size % bsize);
+	qrybin_size = qrybin_size / bsize;
+	qrybin_v = (struct QRYBIN_V **)calloc(qrybin_size, sizeof(struct QRYBIN_V *));
+	for(ui = 0; ui < qrybin_size; ui++)
+	{
+		qrybin_v[ui] = (struct QRYBIN_V *)malloc(sizeof(struct QRYBIN_V));
+		qrybin_v[ui]->size = qrybin_v[ui]->cap = 0;
+	}
+	getqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
+	bi++;
+	free_biosequence(seq);
+	close_filereader(fr);
+	//
+	free(minimizer_v);
+	for(ui = 0; ui < qrybin_size; ui++)
+	{
+		free(qrybin_v[ui]);
+	}
+	free(qrybin_v);
+	//
 	if(_DEBUG_LOG_)
 	{
 	}
@@ -291,6 +375,8 @@ int main(int argc, char **argv)
         }
 	if(strcasecmp("idx", argv[1]) == 0) return main_idx(argc - 1, argv + 1);
 	if(strcasecmp("aln", argv[1]) == 0) return main_aln(argc - 1, argv + 1);
+	if(strcasecmp("-h", argv[1]) == 0) return usage();
+	if(strcasecmp("--help", argv[1]) == 0) return usage();
 	fprintf(stderr, " -- unknown command '%s' -- \n", argv[1]);
 	return 1;
 }
