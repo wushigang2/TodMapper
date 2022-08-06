@@ -338,9 +338,11 @@ int main_aln(int argc, char **argv)
 	free_biosequence(seq);
 	close_filereader(fr);
 	//
+	free(minimizer_v->buffer);
 	free(minimizer_v);
 	for(ui = 0; ui < qrybin_size; ui++)
 	{
+		free(qrybin_v[ui]->buffer);
 		free(qrybin_v[ui]);
 	}
 	free(qrybin_v);
