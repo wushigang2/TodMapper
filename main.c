@@ -313,6 +313,7 @@ int main_aln(int argc, char **argv)
 	mask[3] = (1ULL << 32) - 1;
 	minimizer_v = (struct MINIMIZER_V *)malloc(sizeof(struct MINIMIZER_V));
 	minimizer_v->size = minimizer_v->cap = 0;
+	minimizer_v->buffer = NULL;
 	//
 	if(optind < argc)
 	{
@@ -342,11 +343,10 @@ int main_aln(int argc, char **argv)
 	{
 		qrybin_v[ui] = (struct QRYBIN_V *)malloc(sizeof(struct QRYBIN_V));
 		qrybin_v[ui]->size = qrybin_v[ui]->cap = 0;
+		qrybin_v[ui]->buffer = NULL;
 	}
-	getqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
+	initqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
 	bi++;
-	free_biosequence(seq);
-	close_filereader(fr);
 	//
 	if(alnfn)
 	{
@@ -376,11 +376,25 @@ int main_aln(int argc, char **argv)
 		return usage_aln();
 	}
 	//
-	free(minimizer_v->buffer);
+	while(readseq_filereader(fr, seq))
+	{
+		updateqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
+		bi++;
+	}
+	free_biosequence(seq);
+	close_filereader(fr);
+	//
+	if(minimizer_v->size > 0)
+	{
+		free(minimizer_v->buffer);
+	}
 	free(minimizer_v);
 	for(ui = 0; ui < qrybin_size; ui++)
 	{
-		free(qrybin_v[ui]->buffer);
+		if(qrybin_v[ui]->size > 0)
+		{
+			free(qrybin_v[ui]->buffer);
+		}
 		free(qrybin_v[ui]);
 	}
 	free(qrybin_v);
