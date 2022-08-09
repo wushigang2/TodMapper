@@ -790,9 +790,9 @@ void updateqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, str
 			maxp = ui;
 		}
 	}
-	chain_t.one = kmer_v->size - 1;
-	chain_t.more = seq->seq->size - ksize;
-	chain_push(chain_v, chain_t);
+	//chain_t.one = kmer_v->size - 1;
+	//chain_t.more = seq->seq->size - ksize;
+	//chain_push(chain_v, chain_t);
 	while(maxp != -1)
 	{
 		chain_t.one = anchor_v->buffer[maxp].y;
@@ -800,19 +800,23 @@ void updateqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, str
 		chain_push(chain_v, chain_t);
 		maxp = anchor_v->buffer[maxp].p;
 	}
-	chain_t.one = 0;
-	chain_t.more = 0;
-	chain_push(chain_v, chain_t);
-	for(ui = 1; ui < chain_v->size; ui++)
+	//chain_t.one = 0;
+	//chain_t.more = 0;
+	//chain_push(chain_v, chain_t);
+	if(chain_v->buffer[0].more != 0)
 	{
-		if(ui != 1)
+		for(bj = 0; bj <= chain_v->buffer[0].more - 1; bj++)
 		{
-			bj = chain_v->buffer[ui - 1].more;
-			beg[bj] = chain_v->buffer[ui - 1].one;
+			beg[bj] = 0;
 			beg[bj] = beg[bj] - (beg[bj] % bsize);
 			beg[bj] = beg[bj] / bsize;
-			end[bj] = beg[bj];
+			end[bj] = chain_v->buffer[0].one;
+			end[bj] = end[bj] - (end[bj] % bsize);
+			end[bj] = end[bj] / bsize;
 		}
+	}
+	for(ui = 1; ui < chain_v->size; ui++)
+	{
 		for(bj = chain_v->buffer[ui - 1].more + 1; bj <= chain_v->buffer[ui].more - 1; bj++)
 		{
 			beg[bj] = chain_v->buffer[ui - 1].one;
@@ -822,14 +826,28 @@ void updateqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, str
 			end[bj] = end[bj] - (end[bj] % bsize);
 			end[bj] = end[bj] / bsize;
 		}
-		if(ui != chain_v->size - 1)
+	}
+	if(chain_v->buffer[chain_v->size - 1].more != seq->seq->size - ksize)
+	{
+		for(bj = chain_v->buffer[chain_v->size - 1].more + 1; bj <= seq->seq->size - ksize; bj++)
 		{
-			bj = chain_v->buffer[ui].more;
-			end[bj] = chain_v->buffer[ui].one;
+			beg[bj] = chain_v->buffer[chain_v->size - 1].one;
+			beg[bj] = beg[bj] - (beg[bj] % bsize);
+			beg[bj] = beg[bj] / bsize;
+			end[bj] = kmer_v->size - 1;
 			end[bj] = end[bj] - (end[bj] % bsize);
 			end[bj] = end[bj] / bsize;
-			beg[bj] = end[bj];
 		}
+	}
+	for(ui = 0; ui < chain_v->size; ui++)
+	{
+		bj = chain_v->buffer[ui].more;
+		beg[bj] = chain_v->buffer[ui].one;
+		beg[bj] = beg[bj] - (beg[bj] % bsize);
+		beg[bj] = beg[bj] / bsize;
+		end[bj] = chain_v->buffer[ui].one;
+		end[bj] = end[bj] - (end[bj] % bsize);
+		end[bj] = end[bj] / bsize;
 	}
 	for(ui = 0; ui < minimizer_v->size; ui++)
 	{
