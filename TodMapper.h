@@ -357,12 +357,13 @@ void qrybin_push(struct QRYBIN_V *v, struct QRYBIN_T t)
 	{
 		if(v->buffer[ui].s == t.s)
 		{
-			v->buffer[ui] = v->buffer[v->size - 1];
-			v->size--;
 			break;
 		}
 	}
-	v->buffer[v->size++] = t;
+	if(ui == v->size)
+	{
+		v->buffer[v->size++] = t;
+	}
 }
 
 struct ANCHOR_T
@@ -618,6 +619,7 @@ void updateqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, str
 	struct ANCHOR_V *anchor_v;
 	struct CHAIN_T chain_t;
 	struct CHAIN_V *chain_v;
+	b4i beg[seq->seq->size - ksize + 1], end[seq->seq->size - ksize + 1];
 	//
 	for(bj = 0; bj < 128; bj++)
 	{
@@ -801,12 +803,43 @@ void updateqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, str
 	chain_t.one = 0;
 	chain_t.more = 0;
 	chain_push(chain_v, chain_t);
-	fprintf(stderr, "%d", bi);
-	for(ui = 0; ui < chain_v->size; ui++)
+	for(ui = 1; ui < chain_v->size; ui++)
 	{
-		fprintf(stderr, "\t(%d,%d)", chain_v->buffer[ui].one, chain_v->buffer[ui].more);
+		if(ui != 1)
+		{
+			bj = chain_v->buffer[ui - 1].more;
+			beg[bj] = chain_v->buffer[ui - 1].one;
+			beg[bj] = beg[bj] - (beg[bj] % bsize);
+			beg[bj] = beg[bj] / bsize;
+			end[bj] = beg[bj];
+		}
+		for(bj = chain_v->buffer[ui - 1].more + 1; bj <= chain_v->buffer[ui].more - 1; bj++)
+		{
+			beg[bj] = chain_v->buffer[ui - 1].one;
+			beg[bj] = beg[bj] - (beg[bj] % bsize);
+			beg[bj] = beg[bj] / bsize;
+			end[bj] = chain_v->buffer[ui].one;
+			end[bj] = end[bj] - (end[bj] % bsize);
+			end[bj] = end[bj] / bsize;
+		}
+		if(ui != chain_v->size - 1)
+		{
+			bj = chain_v->buffer[ui].more;
+			end[bj] = chain_v->buffer[ui].one;
+			end[bj] = end[bj] - (end[bj] % bsize);
+			end[bj] = end[bj] / bsize;
+			beg[bj] = end[bj];
+		}
 	}
-	fprintf(stderr, "\n");
+	for(ui = 0; ui < minimizer_v->size; ui++)
+	{
+		qrybin_t.s = minimizer_v->buffer[ui].s;
+		bj = minimizer_v->buffer[ui].ip & mask[3];
+		for(bk = beg[bj]; bk <= end[bj]; bk++)
+		{
+			qrybin_push(bin_v[bk], qrybin_t);
+		}
+	}
 	if(minimizer_v->size > 0)
 	{
 		free(minimizer_v->buffer);

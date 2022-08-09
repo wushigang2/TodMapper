@@ -347,23 +347,20 @@ int main_aln(int argc, char **argv)
 	}
 	initqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
 	bi++;
+	while(readseq_filereader(fr, seq))
+	{
+		updateqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
+		bi++;
+	}
+	free_biosequence(seq);
+	close_filereader(fr);
 	//
 	if(alnfn)
 	{
 		fp = fopen(alnfn, "w");
-		fprintf(fp, "minimizer_v\n");
-		for(ui = 0; ui < minimizer_v->size; ui++)
-		{
-			uj = minimizer_v->buffer[ui].s;
-			fprintf(fp, "%llu ", uj);
-			uj = (minimizer_v->buffer[ui].ip >> 32) & mask[3];
-			fprintf(fp, "%llu ", uj);
-			uj = minimizer_v->buffer[ui].ip & mask[3];
-			fprintf(fp, "%llu\n", uj);
-		}
 		for(ui = 0; ui < qrybin_size; ui++)
 		{
-			fprintf(fp, "qrybin_v[%llu]\n", ui);
+			fprintf(fp, "multi sequence bin[%llu] minimizers\n", ui);
 			for(uj = 0; uj < qrybin_v[ui]->size; uj++)
 			{
 				fprintf(fp, "%llu\n", qrybin_v[ui]->buffer[uj].s);
@@ -375,14 +372,6 @@ int main_aln(int argc, char **argv)
 	{
 		return usage_aln();
 	}
-	//
-	while(readseq_filereader(fr, seq))
-	{
-		updateqrybin(seq, ksize, wsize, bsize, bi, minimizer_v, qrybin_v);
-		bi++;
-	}
-	free_biosequence(seq);
-	close_filereader(fr);
 	//
 	if(minimizer_v->size > 0)
 	{
