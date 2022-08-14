@@ -777,13 +777,15 @@ void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i 
 	}
 }
 
-void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, struct MINIMIZER_V *minimizer_v, struct QRYBIN_V **qrybin_v)
+void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i **fourmermore_buffer, struct QRYBIN_V **qrybin_v)
 {
 	b4i pre_idx, min_idx, bj, bk, bl;
 	u1i nucleobase[256];
 	u8i key[4], mask[4], ui;
 	struct MINIMIZER_T pre_elm[64], min_elm;
 	struct QRYBIN_T qrybin_t;
+	b4i bm, bn;
+	u8i fourmermore_key;
 	//
 	for(bj = 0; bj < 128; bj++)
 	{
@@ -802,21 +804,61 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, st
 	key[0] = key[1] = 0;
 	min_elm.s = UINT64_MAX;
 	bk = 0;
+	fourmermore_key = 0;
 	for(bj = 0; bj < seq->seq->size; bj++)
 	{
 		nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
 		if(nucleobase[128] < 4)
 		{
+			fourmermore_key = ((fourmermore_key << 2) & 256ULL) | nucleobase[128];
 			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
 			key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
 			bk++;
+			if(bk >= 4)
+			{
+				bm = bj - 3;
+				if(bm == 0)
+				{
+					for(bn = 0; bn < 256; bn++)
+					{
+						fourmermore_buffer[bm][bn] = 0;
+					}
+				}
+				else
+				{
+					for(bn = 0; bn < 256; bn++)
+					{
+						fourmermore_buffer[bm][bn] = fourmermore_buffer[bm - 1][bn];
+					}
+
+				}
+				fourmermore_buffer[bm][fourmermore_key]++;
+			}
+			else
+			{
+				bm = bj - 3;
+				if(bm == 0)
+				{
+					for(bn = 0; bn < 256; bn++)
+					{
+						fourmermore_buffer[bm][bn] = 0;
+					}
+				}
+				else if(bm > 0)
+				{
+					for(bn = 0; bn < 256; bn++)
+					{
+						fourmermore_buffer[bm][bn] = fourmermore_buffer[bm - 1][bn];
+					}
+				}
+			}
 			if(bk >= ksize)
 			{
 				key[2] = hash64(key[0], mask[0]);
 				key[3] = hash64(key[1], mask[0]);
 				pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
 				pre_elm[pre_idx].ip = ((u8i)bi << 32) | (bj - ksize + 1);
-				minimizer_push(minimizer_v, pre_elm[pre_idx]);
+				//minimizer_push(minimizer_v, pre_elm[pre_idx]);
 				if(bk < ksize + wsize - 1)
 				{
 					if(min_elm.s >= pre_elm[pre_idx].s)

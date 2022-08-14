@@ -281,6 +281,7 @@ int main_aln(int argc, char **argv)
 	struct MINIMIZER_V *minimizer_v;
 	struct QRYBIN_V **qrybin_v;
 	b4i **fourmerone_buffer, fourmerone_size, bm, bn;
+	b4i **fourmermore_buffer, fourmermore_size;
 	//
 	alnfn = NULL;
 	ksize = 15;
@@ -354,22 +355,21 @@ int main_aln(int argc, char **argv)
 	}
 	initqrybin2(seq, ksize, wsize, bsize, bi, fourmerone_buffer, qrybin_v);
 	bi++;
-	if(alnfn)
+	while(readseq_filereader(fr, seq))
 	{
-		fp = fopen(alnfn, "w");
-		/*for(bm = 0; bm < fourmerone_size; bm++)
+		fourmermore_size = seq->seq->size - 3;
+		fourmermore_buffer = (b4i **)calloc(fourmermore_size, sizeof(b4i *));
+		for(bm = 0; bm < fourmermore_size; bm++)
 		{
-			for(bn = 0; bn < 256; bn++)
-			{
-				fprintf(fp, "%d\t", fourmerone_buffer[bm][bn]);
-			}
-			fprintf(fp, "\n");
-		}*/
-		fclose(fp);
-	}
-	else
-	{
-		return usage_aln();
+			fourmermore_buffer[bm] = (b4i *)calloc(256, sizeof(b4i));
+		}
+		updateqrybin2(seq, ksize, wsize, bsize, bi, fourmermore_buffer, qrybin_v);
+		bi++;
+		for(bm = 0; bm < fourmermore_size; bm++)
+		{
+			free(fourmermore_buffer[bm]);
+		}
+		free(fourmermore_buffer);
 	}
 	free_biosequence(seq);
 	close_filereader(fr);
