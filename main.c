@@ -277,11 +277,14 @@ int main_aln(int argc, char **argv)
 	FILE *fp;
 	char *alnfn;
 	b4i c, ksize, wsize, bsize, ver, bi;
-	u8i mask[4], qrybin_size, ui, uj;
+	u8i mask[4], qrybin_cap, ui, uj;
 	struct MINIMIZER_V *minimizer_v;
 	struct QRYBIN_V **qrybin_v;
-	b4i **fourmerone_buffer, fourmerone_size, bm, bn;
-	b4i **fourmermore_buffer, fourmermore_size;
+	b4i **fourmerone_buffer, fourmerone_cap, bm, bn;
+	b4i **fourmermore_buffer, fourmermore_cap;
+	b4i fourmerone_bm, fourmermore_bm, score;
+	struct QRYBIN_T qrybin_t;
+	b4i maxscore, maxbm;
 	//
 	alnfn = NULL;
 	ksize = 15;
@@ -314,7 +317,7 @@ int main_aln(int argc, char **argv)
 	//
 	mask[3] = (1ULL << 32) - 1;
 	minimizer_v = (struct MINIMIZER_V *)malloc(sizeof(struct MINIMIZER_V));
-	minimizer_v->size = minimizer_v->cap = 0;
+	minimizer_v->cap = 0;
 	minimizer_v->buffer = NULL;
 	//
 	if(optind < argc)
@@ -328,26 +331,26 @@ int main_aln(int argc, char **argv)
 	seq = init_biosequence();
 	bi = 0;
 	readseq_filereader(fr, seq);
-	fourmerone_size = seq->seq->size - 3;
-	fourmerone_buffer = (b4i **)calloc(fourmerone_size, sizeof(b4i *));
-	for(bm = 0; bm < fourmerone_size; bm++)
+	fourmerone_cap = seq->seq->size - 3;
+	fourmerone_buffer = (b4i **)calloc(fourmerone_cap, sizeof(b4i *));
+	for(bm = 0; bm < fourmerone_cap; bm++)
 	{
 		fourmerone_buffer[bm] = (b4i *)calloc(256, sizeof(b4i));
 	}
-	qrybin_size = seq->seq->size;
-	if(qrybin_size % bsize == 0)
+	qrybin_cap = seq->seq->size;
+	if(qrybin_cap % bsize == 0)
 	{
-		qrybin_size = qrybin_size - (qrybin_size % bsize);
-		qrybin_size = qrybin_size / bsize;
+		qrybin_cap = qrybin_cap - (qrybin_cap % bsize);
+		qrybin_cap = qrybin_cap / bsize;
 	}
 	else
 	{
-		qrybin_size = qrybin_size - (qrybin_size % bsize);
-		qrybin_size = qrybin_size / bsize;
-		qrybin_size = qrybin_size + 1;
+		qrybin_cap = qrybin_cap - (qrybin_cap % bsize);
+		qrybin_cap = qrybin_cap / bsize;
+		qrybin_cap = qrybin_cap + 1;
 	}
-	qrybin_v = (struct QRYBIN_V **)calloc(qrybin_size, sizeof(struct QRYBIN_V *));
-	for(ui = 0; ui < qrybin_size; ui++)
+	qrybin_v = (struct QRYBIN_V **)calloc(qrybin_cap, sizeof(struct QRYBIN_V *));
+	for(ui = 0; ui < qrybin_cap; ui++)
 	{
 		qrybin_v[ui] = (struct QRYBIN_V *)malloc(sizeof(struct QRYBIN_V));
 		qrybin_v[ui]->size = qrybin_v[ui]->cap = 0;
@@ -355,38 +358,65 @@ int main_aln(int argc, char **argv)
 	}
 	initqrybin2(seq, ksize, wsize, bsize, bi, fourmerone_buffer, qrybin_v);
 	bi++;
+	fp = fopen(alnfn, "w");
 	while(readseq_filereader(fr, seq))
 	{
-		fourmermore_size = seq->seq->size - 3;
-		fourmermore_buffer = (b4i **)calloc(fourmermore_size, sizeof(b4i *));
-		for(bm = 0; bm < fourmermore_size; bm++)
+		fourmermore_cap = seq->seq->size - 3;
+		fourmermore_buffer = (b4i **)calloc(fourmermore_cap, sizeof(b4i *));
+		minimizer_v->size = 0;
+		for(bm = 0; bm < fourmermore_cap; bm++)
 		{
 			fourmermore_buffer[bm] = (b4i *)calloc(256, sizeof(b4i));
 		}
-		updateqrybin2(seq, ksize, wsize, bsize, bi, fourmermore_buffer, qrybin_v);
+		updateqrybin2(seq, ksize, wsize, bsize, bi, fourmermore_buffer, minimizer_v);
 		bi++;
-		for(bm = 0; bm < fourmermore_size; bm++)
+		maxbm = 0;
+		for(ui = 0; ui < minimizer_v->size; ui++)
+		{
+			fourmermore_bm = minimizer_v->buffer[ui].ip & mask[3];
+			fourmerone_bm = (maxbm * bsize) + (bsize / 2) - 1;
+			maxscore = getscore(fourmerone_buffer, fourmerone_bm, fourmerone_cap, fourmermore_buffer, fourmermore_bm, fourmermore_cap);
+			for(bm = maxbm + 1; (bm * bsize) + (bsize / 2) - 1 < fourmerone_cap; bm++)
+			{
+				fourmerone_bm = (bm * bsize) + (bsize / 2) - 1;
+				score = getscore(fourmerone_buffer, fourmerone_bm, fourmerone_cap, fourmermore_buffer, fourmermore_bm, fourmermore_cap);
+				if(maxscore < score)
+				{
+					maxscore = score;
+					maxbm = bm;
+				}
+				else
+				{
+					break;
+				}
+			}
+			qrybin_t.s = minimizer_v->buffer[ui].s;
+			qrybin_push(qrybin_v[maxbm], qrybin_t);
+			fprintf(fp, "bi = %d, fourmermore_bm = %d, maxbm = %d\n", bi, fourmermore_bm, maxbm);
+		}
+		for(bm = 0; bm < fourmermore_cap; bm++)
 		{
 			free(fourmermore_buffer[bm]);
 		}
 		free(fourmermore_buffer);
 	}
+	fclose(fp);
 	free_biosequence(seq);
 	close_filereader(fr);
 	//
-	if(minimizer_v->size > 0)
+	if(minimizer_v->cap > 0)
 	{
 		free(minimizer_v->buffer);
 	}
 	free(minimizer_v);
-	for(bm = 0; bm < fourmerone_size; bm++)
+	for(bm = 0; bm < fourmerone_cap; bm++)
 	{
 		free(fourmerone_buffer[bm]);
 	}
 	free(fourmerone_buffer);
-	for(ui = 0; ui < qrybin_size; ui++)
+	for(ui = 0; ui < qrybin_cap; ui++)
 	{
-		if(qrybin_v[ui]->size > 0)
+		if(qrybin_v[ui]->cap > 0)
 		{
 			free(qrybin_v[ui]->buffer);
 		}

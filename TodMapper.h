@@ -50,23 +50,23 @@ struct QRYBIN_V
 
 void qrybin_push(struct QRYBIN_V *v, struct QRYBIN_T t)
 {
-	u8i ui;
+	//u8i ui;
 	if(v->size == v->cap)
 	{
 		v->cap = v->cap ? v->cap << 1 : 2;
 		v->buffer = (struct QRYBIN_T *)realloc(v->buffer, sizeof(struct QRYBIN_T) * v->cap);
 	}
-	for(ui = 0; ui < v->size; ui++)
-	{
-		if(v->buffer[ui].s == t.s)
-		{
-			break;
-		}
-	}
-	if(ui == v->size)
-	{
+	//for(ui = 0; ui < v->size; ui++)
+	//{
+	//	if(v->buffer[ui].s == t.s)
+	//	{
+	//		break;
+	//	}
+	//}
+	//if(ui == v->size)
+	//{
 		v->buffer[v->size++] = t;
-	}
+	//}
 }
 
 struct ANCHOR_T
@@ -587,6 +587,7 @@ void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i 
 	struct QRYBIN_T qrybin_t;
 	b4i bm, bn;
 	u8i fourmerone_key;
+	//b4i last_bm[256];
 	//
 	for(bj = 0; bj < 128; bj++)
 	{
@@ -611,10 +612,54 @@ void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i 
 		nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
 		if(nucleobase[128] < 4)
 		{
-			fourmerone_key = ((fourmerone_key << 2) & 256ULL) | nucleobase[128];
+			fourmerone_key = ((fourmerone_key << 2) & 255ULL) | nucleobase[128];
 			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
 			key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
 			bk++;
+			/*bm = bj - 3;
+			if(bm == 0)
+			{
+				for(bn = 0; bn < 256; bn++)
+				{
+					fourmerone_buffer[bm][bn] = 0;
+					last_bm[bn] = 0;
+				}
+				if(bk >= 4)
+				{
+					fourmerone_buffer[bm][fourmerone_key]++;
+				}
+			}
+			else if(bm > 0 && bm < (bsize / 2) - 1)
+			{
+				if(bk >= 4)
+				{
+					fourmerone_buffer[bm][fourmerone_key] = fourmerone_buffer[last_bm[fourmerone_key]][fourmerone_key] + 1;
+					last_bm[fourmerone_key] = bm;
+				}
+			}
+			else if(bm >= (bsize / 2) - 1)
+			{
+				if((bm - ((bsize / 2) - 1)) % bsize == 0)
+				{
+					for(bn = 0; bn < 256; bn++)
+					{
+						fourmerone_buffer[bm][bn] = fourmerone_buffer[last_bm[bn]][bn];
+					}
+					if(bk >= 4)
+					{
+						fourmerone_buffer[bm][fourmerone_key]++;
+						last_bm[fourmerone_key] = bm;
+					}
+				}
+				else
+				{
+					if(bk >= 4)
+					{
+						fourmerone_buffer[bm][fourmerone_key] = fourmerone_buffer[last_bm[fourmerone_key]][fourmerone_key] + 1;
+						last_bm[fourmerone_key] = bm;
+					}
+				}
+			}*/
 			if(bk >= 4)
 			{
 				bm = bj - 3;
@@ -777,7 +822,7 @@ void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i 
 	}
 }
 
-void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i **fourmermore_buffer, struct QRYBIN_V **qrybin_v)
+void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i **fourmermore_buffer, struct MINIMIZER_V *minimizer_v)
 {
 	b4i pre_idx, min_idx, bj, bk, bl;
 	u1i nucleobase[256];
@@ -786,6 +831,7 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 	struct QRYBIN_T qrybin_t;
 	b4i bm, bn;
 	u8i fourmermore_key;
+	//b4i last_bm[256];
 	//
 	for(bj = 0; bj < 128; bj++)
 	{
@@ -810,10 +856,23 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 		nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
 		if(nucleobase[128] < 4)
 		{
-			fourmermore_key = ((fourmermore_key << 2) & 256ULL) | nucleobase[128];
+			fourmermore_key = ((fourmermore_key << 2) & 255ULL) | nucleobase[128];
 			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
 			key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
 			bk++;
+			/*bm = bj - 3;
+			if(bm == 0)
+			{
+				for(bn = 0; bn < 256; bn++)
+				{
+					fourmermore_buffer[bm][bn] = 0;
+					last_bm[bn] = 0;
+				}
+				if(bk >= 4)
+				{
+					fourmermore_buffer[bm][fourmermore_key]++;
+				}
+			}*/
 			if(bk >= 4)
 			{
 				bm = bj - 3;
@@ -880,22 +939,30 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 					{
 						if(pre_elm[bl].s == min_elm.s)
 						{
-							qrybin_t.s = pre_elm[bl].s;
-							ui = pre_elm[bl].ip & mask[3];
-							ui = ui - (ui % bsize);
-							ui = ui / bsize;
-							qrybin_push(qrybin_v[ui], qrybin_t);
+							minimizer_push(minimizer_v, pre_elm[bl]);
+							/*fourmermore_key = pre_elm[bl].s >> ((ksize * 2) - 8);
+							bm = pre_elm[bl].ip & mask[3];
+							for(bn = 0; bn < 256; bn++)
+							{
+								fourmermore_buffer[bm][bn] = fourmermore_buffer[last_bm[bn]][bn];
+							}
+							fourmermore_buffer[bm][fourmermore_key]++;
+							last_bm[fourmermore_key] = bm;*/
 						}
 					}
 					for(bl = 0; bl < pre_idx; bl++)
 					{
 						if(pre_elm[bl].s == min_elm.s)
 						{
-							qrybin_t.s = pre_elm[bl].s;
-							ui = pre_elm[bl].ip & mask[3];
-							ui = ui - (ui % bsize);
-							ui = ui / bsize;
-							qrybin_push(qrybin_v[ui], qrybin_t);
+							minimizer_push(minimizer_v, pre_elm[bl]);
+							/*fourmermore_key = pre_elm[bl].s >> ((ksize * 2) - 8);
+							bm = pre_elm[bl].ip & mask[3];
+							for(bn = 0; bn < 256; bn++)
+							{
+								fourmermore_buffer[bm][bn] = fourmermore_buffer[last_bm[bn]][bn];
+							}
+							fourmermore_buffer[bm][fourmermore_key]++;
+							last_bm[fourmermore_key] = bm;*/
 						}
 					}
 				}
@@ -903,11 +970,15 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 				{
 					if(min_elm.s >= pre_elm[pre_idx].s)
 					{
-						qrybin_t.s = pre_elm[pre_idx].s;
-						ui = pre_elm[pre_idx].ip & mask[3];
-						ui = ui - (ui % bsize);
-						ui = ui / bsize;
-						qrybin_push(qrybin_v[ui], qrybin_t);
+						minimizer_push(minimizer_v, pre_elm[pre_idx]);
+						/*fourmermore_key = pre_elm[pre_idx].s >> ((ksize * 2) - 8);
+						bm = pre_elm[pre_idx].ip & mask[3];
+						for(bn = 0; bn < 256; bn++)
+						{
+							fourmermore_buffer[bm][bn] = fourmermore_buffer[last_bm[bn]][bn];
+						}
+						fourmermore_buffer[bm][fourmermore_key]++;
+						last_bm[fourmermore_key] = bm;*/
 						min_elm = pre_elm[pre_idx];
 						min_idx = pre_idx;
 						pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
@@ -938,22 +1009,30 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 							{
 								if(pre_elm[bl].s == min_elm.s)
 								{
-									qrybin_t.s = pre_elm[bl].s;
-									ui = pre_elm[bl].ip & mask[3];
-									ui = ui - (ui % bsize);
-									ui = ui / bsize;
-									qrybin_push(qrybin_v[ui], qrybin_t);
+									minimizer_push(minimizer_v, pre_elm[bl]);
+									/*fourmermore_key = pre_elm[bl].s >> ((ksize * 2) - 8);
+									bm = pre_elm[bl].ip & mask[3];
+									for(bn = 0; bn < 256; bn++)
+									{
+										fourmermore_buffer[bm][bn] = fourmermore_buffer[last_bm[bn]][bn];
+									}
+									fourmermore_buffer[bm][fourmermore_key]++;
+									last_bm[fourmermore_key] = bm;*/
 								}
 							}
 							for(bl = 0; bl < pre_idx; bl++)
 							{
 								if(pre_elm[bl].s == min_elm.s)
 								{
-									qrybin_t.s = pre_elm[bl].s;
-									ui = pre_elm[bl].ip & mask[3];
-									ui = ui - (ui % bsize);
-									ui = ui / bsize;
-									qrybin_push(qrybin_v[ui], qrybin_t);
+									minimizer_push(minimizer_v, pre_elm[bl]);
+									/*fourmermore_key = pre_elm[bl].s >> ((ksize * 2) - 8);
+									bm = pre_elm[bl].ip & mask[3];
+									for(bn = 0; bn < 256; bn++)
+									{
+										fourmermore_buffer[bm][bn] = fourmermore_buffer[last_bm[bn]][bn];
+									}
+									fourmermore_buffer[bm][fourmermore_key]++;
+									last_bm[fourmermore_key] = bm;*/
 								}
 							}
 						}
@@ -974,4 +1053,26 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 			min_elm.s = UINT64_MAX;
 		}
 	}
+}
+
+b4i getscore(b4i **fourmerone_buffer, b4i fourmerone_bm, b4i fourmerone_cap, b4i **fourmermore_buffer, b4i fourmermore_bm, b4i fourmermore_cap)
+{
+	b4i score, bn, tmp;
+	score = 0;
+	for(bn = 0; bn < 256; bn++)
+	{
+		tmp = fourmerone_buffer[fourmerone_bm][bn];
+		if(tmp > fourmermore_buffer[fourmermore_bm][bn])
+		{
+			tmp = fourmermore_buffer[fourmermore_bm][bn];
+		}
+		score = score + tmp;
+		tmp = fourmerone_buffer[fourmerone_cap - 1][bn] - fourmerone_buffer[fourmerone_bm][bn];
+		if(tmp > fourmermore_buffer[fourmermore_cap - 1][bn] - fourmermore_buffer[fourmermore_bm][bn])
+		{
+			tmp = fourmermore_buffer[fourmermore_cap - 1][bn] - fourmermore_buffer[fourmermore_bm][bn];
+		}
+		score = score + tmp;
+	}
+	return score;
 }
