@@ -36,6 +36,86 @@ void minimizer_push(struct MINIMIZER_V *v, struct MINIMIZER_T t)
 	v->buffer[v->size++] = t;
 }
 
+struct HASH_T
+{
+	u8i s;
+	u8i beg;
+	u8i len;
+};
+
+struct HASH_V
+{
+	u8i size;
+	u8i cap;
+	struct HASH_T *buffer;
+};
+
+void hash_push(struct HASH_V *v, struct HASH_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct HASH_T *)realloc(v->buffer, sizeof(struct HASH_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
+struct REFBIN_T
+{
+	u8i s;
+	u8i ip;
+};
+
+struct REFBIN_V
+{
+	u8i size;
+	u8i cap;
+	struct REFBIN_T *buffer;
+};
+
+void refbin_push(struct REFBIN_V *v, struct REFBIN_T t)
+{
+	//u8i ui;
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct REFBIN_T *)realloc(v->buffer, sizeof(struct REFBIN_T) * v->cap);
+	}
+	/*if(t.ip != v->buffer[v->size - 1].ip)
+	{
+		v->buffer[v->size++] = t;
+	}
+	else if(t.ip == v->buffer[0].ip)
+	{
+		for(ui = 0; ui < v->size; ui++)
+		{
+			if(t.s == v->buffer[ui].s)
+			{
+				break;
+			}
+		}
+		if(ui == v->size)
+		{
+			v->buffer[v->size++] = t;
+		}
+	}
+	else
+	{
+		for(ui = v->size - 1; t.ip == v->buffer[ui].ip; ui--)
+		{
+			if(t.s == v->buffer[ui].s)
+			{
+				break;
+			}
+		}
+		if(t.ip != v->buffer[ui].ip)
+		{
+			v->buffer[v->size++] = t;
+		}
+	}*/
+	v->buffer[v->size++] = t;
+}
+
 struct QRYBIN_T
 {
 	u8i s;
@@ -578,6 +658,169 @@ void updateqrybin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, str
 	free(chain_v);
 }
 
+void getrefbin(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, struct REFBIN_V *refbin_v)
+{
+	b4i pre_idx, min_idx, bj, bk, bl;
+	u1i nucleobase[256];
+	u8i key[4], mask[8], ui;
+	struct MINIMIZER_T pre_elm[64], min_elm;
+	struct REFBIN_T refbin_t;
+	//
+	for(bj = 0; bj < 128; bj++)
+	{
+		nucleobase[bj] = 4;
+	}
+	nucleobase[65] = nucleobase[97] = 0;
+	nucleobase[67] = nucleobase[99] = 1;
+	nucleobase[71] = nucleobase[103] = 2;
+	nucleobase[84] = nucleobase[85] = nucleobase[116] = nucleobase[117] = 3;
+	mask[0] = (1ULL << (ksize * 2)) - 1;
+	mask[1] = (1ULL << 62) - 1;
+	mask[2] = (ksize - 1) * 2;
+	mask[3] = (1ULL << 32) - 1;
+	mask[4] = mask[3] << 32;
+	//
+	pre_idx = min_idx = 0;
+	key[0] = key[1] = 0;
+	min_elm.s = UINT64_MAX;
+	bk = 0;
+	for(bj = 0; bj < seq->seq->size; bj++)
+	{
+		nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
+		if(nucleobase[128] < 4)
+		{
+			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
+			key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
+			bk++;
+			if(bk >= ksize)
+			{
+				key[2] = hash64(key[0], mask[0]);
+				key[3] = hash64(key[1], mask[0]);
+				//pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
+				pre_elm[pre_idx].s = key[0] <= key[1] ? key[2] : key[3];
+				pre_elm[pre_idx].ip = ((u8i)bi << 32) | (bj - ksize + 1);
+				if(bk < ksize + wsize - 1)
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+					}
+					pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+				}
+				else if(bk == ksize + wsize - 1)
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+					}
+					pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+					for(bl = pre_idx; bl < wsize; bl++)
+					{
+						if(pre_elm[bl].s == min_elm.s)
+						{
+							refbin_t.s = pre_elm[bl].s;
+							ui = pre_elm[bl].ip & mask[3];
+							ui = ui - (ui % bsize);
+							ui = ui / bsize;
+							refbin_t.ip = (pre_elm[bl].ip & mask[4]) | ui;
+							refbin_push(refbin_v, refbin_t);
+						}
+					}
+					for(bl = 0; bl < pre_idx; bl++)
+					{
+						if(pre_elm[bl].s == min_elm.s)
+						{
+							refbin_t.s = pre_elm[bl].s;
+							ui = pre_elm[bl].ip & mask[3];
+							ui = ui - (ui % bsize);
+							ui = ui / bsize;
+							refbin_t.ip = (pre_elm[bl].ip & mask[4]) | ui;
+							refbin_push(refbin_v, refbin_t);
+						}
+					}
+				}
+				else
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						refbin_t.s = pre_elm[pre_idx].s;
+						ui = pre_elm[pre_idx].ip & mask[3];
+						ui = ui - (ui % bsize);
+						ui = ui / bsize;
+						refbin_t.ip = (pre_elm[pre_idx].ip & mask[4]) | ui;
+						refbin_push(refbin_v, refbin_t);
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+						pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+					}
+					else
+					{
+						if(min_idx == pre_idx)
+						{
+							min_elm.s = UINT64_MAX;
+							pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+							for(bl = pre_idx; bl < wsize; bl++)
+							{
+								if(min_elm.s >= pre_elm[bl].s)
+								{
+									min_elm = pre_elm[bl];
+									min_idx = bl;
+								}
+							}
+							for(bl = 0; bl < pre_idx; bl++)
+							{
+								if(min_elm.s >= pre_elm[bl].s)
+								{
+									min_elm = pre_elm[bl];
+									min_idx = bl;
+								}
+							}
+							for(bl = pre_idx; bl < wsize; bl++)
+							{
+								if(pre_elm[bl].s == min_elm.s)
+								{
+									refbin_t.s = pre_elm[bl].s;
+									ui = pre_elm[bl].ip & mask[3];
+									ui = ui - (ui % bsize);
+									ui = ui / bsize;
+									refbin_t.ip = (pre_elm[bl].ip & mask[4]) | ui;
+									refbin_push(refbin_v, refbin_t);
+								}
+							}
+							for(bl = 0; bl < pre_idx; bl++)
+							{
+								if(pre_elm[bl].s == min_elm.s)
+								{
+									refbin_t.s = pre_elm[bl].s;
+									ui = pre_elm[bl].ip & mask[3];
+									ui = ui - (ui % bsize);
+									ui = ui / bsize;
+									refbin_t.ip = (pre_elm[bl].ip & mask[4]) | ui;
+									refbin_push(refbin_v, refbin_t);
+								}
+							}
+						}
+						else
+						{
+							pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+						}
+					}
+				}
+			}
+			else
+			{
+			}
+		}
+		else
+		{
+			bk = 0;
+			min_elm.s = UINT64_MAX;
+		}
+	}
+}
+
 void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i **fourmerone_buffer, struct QRYBIN_V **qrybin_v)
 {
 	b4i pre_idx, min_idx, bj, bk, bl;
@@ -702,7 +945,8 @@ void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i 
 			{
 				key[2] = hash64(key[0], mask[0]);
 				key[3] = hash64(key[1], mask[0]);
-				pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
+				//pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
+				pre_elm[pre_idx].s = key[0] <= key[1] ? key[2] : key[3];
 				pre_elm[pre_idx].ip = ((u8i)bi << 32) | (bj - ksize + 1);
 				//minimizer_push(minimizer_v, pre_elm[pre_idx]);
 				if(bk < ksize + wsize - 1)
@@ -822,13 +1066,12 @@ void initqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i 
 	}
 }
 
-void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4i **fourmermore_buffer, struct MINIMIZER_V *minimizer_v)
+void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, b4i **fourmermore_buffer, struct MINIMIZER_V *minimizer_v)
 {
 	b4i pre_idx, min_idx, bj, bk, bl;
 	u1i nucleobase[256];
-	u8i key[4], mask[4], ui;
+	u8i key[4], mask[4];
 	struct MINIMIZER_T pre_elm[64], min_elm;
-	struct QRYBIN_T qrybin_t;
 	b4i bm, bn;
 	u8i fourmermore_key;
 	//b4i last_bm[256];
@@ -915,7 +1158,8 @@ void updateqrybin2(BioSequence *seq, b4i ksize, b4i wsize, b4i bsize, b4i bi, b4
 			{
 				key[2] = hash64(key[0], mask[0]);
 				key[3] = hash64(key[1], mask[0]);
-				pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
+				//pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
+				pre_elm[pre_idx].s = key[0] <= key[1] ? key[2] : key[3];
 				pre_elm[pre_idx].ip = ((u8i)bi << 32) | (bj - ksize + 1);
 				//minimizer_push(minimizer_v, pre_elm[pre_idx]);
 				if(bk < ksize + wsize - 1)
@@ -1075,4 +1319,197 @@ b4i getscore(b4i **fourmerone_buffer, b4i fourmerone_bm, b4i fourmerone_cap, b4i
 		score = score + tmp;
 	}
 	return score;
+}
+
+void sortrefbin(struct REFBIN_V *refbin_v)
+{
+	u8i ui, uj;
+	struct REFBIN_T refbin_t;
+	for(ui = 1; ui < refbin_v->size; ui++)
+	{
+		for(uj = refbin_v->size - 1; uj >= ui; uj--)
+		{
+			if(refbin_v->buffer[uj - 1].s > refbin_v->buffer[uj].s)
+			{
+				refbin_t = refbin_v->buffer[uj - 1];
+				refbin_v->buffer[uj - 1] = refbin_v->buffer[uj];
+				refbin_v->buffer[uj] = refbin_t;
+			}
+		}
+	}
+}
+
+void sortrefbin2(struct REFBIN_V *refbin_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct REFBIN_T refbin_t;
+	left = beg;
+	right = end;
+	refbin_t = refbin_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if(refbin_v->buffer[right].s < refbin_t.s)
+			{
+				refbin_v->buffer[left] = refbin_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if(refbin_v->buffer[left].s > refbin_t.s)
+			{
+				refbin_v->buffer[right] = refbin_v->buffer[left];
+				break;
+			}
+		}
+	}
+	refbin_v->buffer[left] = refbin_t;
+	if(left - beg - 1 > 1)
+	{
+		sortrefbin2(refbin_v, beg, left - 1);
+	}
+	if(end - right - 1 > 1)
+	{
+		sortrefbin2(refbin_v, right + 1, end);
+	}
+}
+
+void sortanchor(struct ANCHOR_V *anchor_v, b4i beg, b4i end)
+{
+        b4i left, right;
+        struct ANCHOR_T anchor_t;
+        left = beg;
+        right = end;
+        anchor_t = anchor_v->buffer[left];
+        while(left != right)
+        {
+                for(right = right; right > left; right--)
+                {
+                        if(anchor_v->buffer[right].x < anchor_t.x)
+                        {
+                                anchor_v->buffer[left] = anchor_v->buffer[right];
+                                break;
+                        }
+                }
+                for(left = left; left < right; left++)
+                {
+                        if(anchor_v->buffer[left].x > anchor_t.x)
+                        {
+                                anchor_v->buffer[right] = anchor_v->buffer[left];
+                                break;
+                        }
+                }
+        }
+        anchor_v->buffer[left] = anchor_t;
+        if(left - beg - 1 > 1)
+        {
+                sortanchor(anchor_v, beg, left - 1);
+        }
+        if(end - right - 1 > 1)
+        {
+                sortanchor(anchor_v, right + 1, end);
+        }
+}
+
+void sortip(u8i *ip_buffer, b4i beg, b4i end)
+{
+	b4i left, right;
+	u8i ip;
+	left = beg;
+	right = end;
+	ip = ip_buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if(ip_buffer[right] < ip)
+			{
+				ip_buffer[left] = ip_buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if(ip_buffer[left] > ip)
+			{
+				ip_buffer[right] = ip_buffer[left];
+				break;
+			}
+		}
+	}
+	ip_buffer[left] = ip;
+	if(left - beg - 1 > 1)
+	{
+		sortip(ip_buffer, beg, left - 1);
+	}
+	if(end - right - 1 > 1)
+	{
+		sortip(ip_buffer, right + 1, end);
+	}
+}
+
+b4i searchhash(u8i s, struct HASH_V *hash_v)
+{
+	b4i low, mid, high, bi;
+	low = 0;
+	mid = hash_v->size;
+	high = hash_v->size - 1;
+	while(low <= high)
+	{
+		bi = low + high;
+		mid = bi % 2 == 0 ? bi / 2 : (bi - 1) / 2;
+		if(hash_v->buffer[mid].s < s)
+		{
+			low = mid + 1;
+		}
+		else if(hash_v->buffer[mid].s > s)
+		{
+			high = mid - 1;
+		}
+		else
+		{
+			break;
+		}
+	}
+	if(low > high)
+	{
+		mid = hash_v->size;
+	}
+	return mid;
+}
+
+void getfp(struct ANCHOR_V *anchor_v)
+{
+	u8i ui, uj, uk;
+	float f, b;
+	for(ui = 1; ui < anchor_v->size; ui++)
+	{
+		uk = 0;
+		for(uj = 0; uj < ui; uj++)
+		{
+			if(anchor_v->buffer[uj].x >= anchor_v->buffer[ui].x || anchor_v->buffer[uj].y >= anchor_v->buffer[ui].y)
+			{
+				continue;
+			}
+			b = (anchor_v->buffer[ui].y - anchor_v->buffer[uj].y) - (anchor_v->buffer[ui].x - anchor_v->buffer[uj].x);
+			b = b >= 0 ? b : 0 - b;
+			f = anchor_v->buffer[uj].f + 1 - (b * 0.5);
+			if(anchor_v->buffer[ui].f < f)
+			{
+				anchor_v->buffer[ui].f = f;
+				anchor_v->buffer[ui].p = uj;
+				uk = 0;
+			}
+			else
+			{
+				uk++;
+			}
+			if(uk == 50)
+			{
+				break;
+			}
+		}
+	}
 }
