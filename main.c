@@ -1,314 +1,78 @@
 #include "TodMapper.h"
 
-int usage_idx()
+int usage_cnt()
 {
-	fprintf(stdout,
-        "usage: TodMapper idx [options] <input file>\n"
-        " -o <string> index file, [NULL]\n"
-        " -k <int>    kmer size, [15]\n"
-        " -w <int>    window size, [10]\n"
-        " -v          verbose\n"
-        "\n"
-        "for example: index human reference genome GRCh38p13.fa\n"
-        "TodMapper idx -o GRCh38p13.idx GRCh38p13.fa\n"
-        );
-        return 1;
+	return 1;
 }
 
-int main_idx(int argc, char **argv)
+int main_cnt()
 {
-	FileReader *fr;
-        BioSequence *seq;
-	FILE *fp;
-	char *idxfn;
-	b4i c, ksize, wsize, ver, pre_idx, min_idx, bi, bj, bk, bl;
-	u1i nucleobase[256];
-	u8i key[4], mask[4], ui, uj;
-        //u8i key[4], mask[4], ui;
-	struct MINIMIZER_T pre_elm[64], min_elm;
-	struct MINIMIZER_V *minimizer_v;
-	//
-	idxfn = NULL;
-	ksize = 15;
-	wsize = 10;
-        ver = 0;
-        while((c = getopt(argc, argv, "ho:k:w:v")) != -1)
-        {
-                switch(c)
-                {
-			case 'o':
-                                idxfn = optarg;
-                                break;
-			case 'k':
-                                ksize = atoi(optarg);
-                                break;
-			case 'w':
-                                wsize = atoi(optarg);
-                                break;
-                        case 'v':
-                                ver++;
-                                break;
-                        default:
-                                return usage_idx();
-                }
-        }
-	//
-	for(bi = 0; bi < 128; bi++)
+	if(_DEBUG_LOG_)
 	{
-		nucleobase[bi] = 4;
 	}
-	nucleobase[65] = nucleobase[97] = 0;
-	nucleobase[67] = nucleobase[99] = 1;
-        nucleobase[71] = nucleobase[103] = 2;
-        nucleobase[84] = nucleobase[85] = nucleobase[116] = nucleobase[117] = 3;
-	mask[0] = (1ULL << (ksize * 2)) - 1;
-	mask[1] = (1ULL << 62) - 1;
-	mask[2] = (ksize - 1) * 2;
-	mask[3] = (1ULL << 32) - 1;
-	minimizer_v = (struct MINIMIZER_V *)malloc(sizeof(struct MINIMIZER_V));
-	minimizer_v->size = minimizer_v->cap = 0;
-	//
-	if(optind < argc)
-        {
-                fr = open_all_filereader(1, argv + argc - 1, 0);
-        }
-        else
-        {
-                return usage_idx();
-        }
-        seq = init_biosequence();
-	bi = 0;
-	//while(bi < 3 && readseq_filereader(fr, seq))
-        while(readseq_filereader(fr, seq))
-	{
-		pre_idx = min_idx = 0;
-		key[0] = key[1] = 0;
-		min_elm.s = UINT64_MAX;
-		bk = 0;
-		for(bj = 0; bj < seq->seq->size; bj++)
-		{
-			nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
-			if(nucleobase[128] < 4)
-			{
-				key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
-				key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
-				bk++;
-				if(bk >= ksize)
-				{
-					key[2] = hash64(key[0], mask[0]);
-                                        key[3] = hash64(key[1], mask[0]);
-					pre_elm[pre_idx].s = key[2] <= key[3] ? key[2] : key[3];
-                                        pre_elm[pre_idx].ip = ((u8i)bi << 32) | (bj - ksize + 1);
-                                        //fprintf(stdout, "%llu %d %d\n", pre_elm[pre_idx].s, bi, bj - ksize + 1);
-					if(bk < ksize + wsize - 1)
-					{
-						if(min_elm.s >= pre_elm[pre_idx].s)
-						{
-							min_elm = pre_elm[pre_idx];
-							min_idx = pre_idx;
-						}
-						pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-					}
-					else if(bk == ksize + wsize - 1)
-					{
-						if(min_elm.s >= pre_elm[pre_idx].s)
-                                                {
-                                                        min_elm = pre_elm[pre_idx];
-                                                        min_idx = pre_idx;
-                                                }
-                                                pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-						/*for(bl = 0; bl < wsize; bl++)
-						{
-							if(pre_elm[bl].s == min_elm.s)
-							{
-								minimizer_push(minimizer_v, pre_elm[bl]);
-							}
-						}*/
-						for(bl = pre_idx; bl < wsize; bl++)
-						{
-							if(pre_elm[bl].s == min_elm.s)
-                                                        {
-                                                                minimizer_push(minimizer_v, pre_elm[bl]);
-                                                        }
-						}
-						for(bl = 0; bl < pre_idx; bl++)
-						{
-							if(pre_elm[bl].s == min_elm.s)
-                                                        {
-                                                                minimizer_push(minimizer_v, pre_elm[bl]);
-                                                        }
-						}
-					}
-					else
-					{
-						if(min_elm.s >= pre_elm[pre_idx].s)
-						{
-							minimizer_push(minimizer_v, pre_elm[pre_idx]);
-							min_elm = pre_elm[pre_idx];
-                                                        min_idx = pre_idx;
-	                                                pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-						}
-						else
-						{
-							if(min_idx == pre_idx)
-							{
-								min_elm.s = UINT64_MAX;
-								pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-								for(bl = pre_idx; bl < wsize; bl++)
-                                                                {
-                                                                        if(min_elm.s >= pre_elm[bl].s)
-                                                                        {
-                                                                                min_elm = pre_elm[bl];
-                                                                                min_idx = bl;
-                                                                        }
-                                                                }
-								for(bl = 0; bl < pre_idx; bl++)
-								{
-									if(min_elm.s >= pre_elm[bl].s)
-									{
-										min_elm = pre_elm[bl];
-										min_idx = bl;
-									}
-								}
-								/*for(bl = 0; bl < wsize; bl++)
-								{
-									if(pre_elm[bl].s == min_elm.s)
-									{
-										minimizer_push(minimizer_v, pre_elm[bl]);
-									}
-								}*/
-								for(bl = pre_idx; bl < wsize; bl++)
-								{
-									if(pre_elm[bl].s == min_elm.s)
-									{
-										minimizer_push(minimizer_v, pre_elm[bl]);
-									}
-								}
-								for(bl = 0; bl < pre_idx; bl++)
-								{
-									if(pre_elm[bl].s == min_elm.s)
-									{
-										minimizer_push(minimizer_v, pre_elm[bl]);
-									}
-								}
-							}
-							else
-							{
-								pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-							}
-						}
-					}
-				}
-				else
-				{
-					//fprintf(stdout, "%d %d %d\n", -1, bi, bj - ksize + 1);
-				}
-			}
-			else
-			{
-				bk = 0;
-				min_elm.s = UINT64_MAX;
-				//fprintf(stdout, "%d %d %d\n", -1, bi, bj - ksize + 1);
-			}
-		}
-		bi++;
-	}
-	free_biosequence(seq);
-        close_filereader(fr);
-	//
-	if(idxfn)
-	{
-		fp = fopen(idxfn, "w");
-		/*for(ui = 0; ui < minimizer_v->size; ui++)
-		{
-			for(bi = 56; bi >= 0; bi = bi - 8)
-			{
-				nucleobase[128] = (minimizer_v->buffer[ui].s >> bi) & 255;
-				fprintf(fp, "%c", nucleobase[128]);
-			}
-			for(bi = 56; bi >= 0; bi = bi - 8)
-                        {
-                                nucleobase[128] = (minimizer_v->buffer[ui].ip >> bi) & 255;
-                                fprintf(fp, "%c", nucleobase[128]);
-                        }
-		}*/
-		for(ui = 0; ui < minimizer_v->size; ui++)
-                {
-			uj = minimizer_v->buffer[ui].s;
-			fprintf(fp, "%llu ", uj);
-			uj = (minimizer_v->buffer[ui].ip >> 32) & mask[3];
-			fprintf(fp, "%llu ", uj);
-                        uj = minimizer_v->buffer[ui].ip & mask[3];
-                        fprintf(fp, "%llu\n", uj);
-                }
-		fclose(fp);
-	}
-	else
-	{
-		return usage_idx();
-	}
-	//
-	free(minimizer_v->buffer);
-	free(minimizer_v);
-	//
-        return 0;
+	return 0;
 }
 
-int usage_aln()
+int usage_map()
 {
 	fprintf(stdout,
-	"usage: TodMapper aln [options] <input file>\n"
-	" -o <string> index file, [NULL]\n"
+	"usage: TodMapper map [options] <input file>\n"
+	" -q <string> multi sequence file, [NULL]\n"
+	" -r <string> genome file, [NULL]\n"
+	" -o <string> output file, [NULL]\n"
 	" -k <int>    kmer size, [15]\n"
 	" -w <int>    window size, [10]\n"
 	" -b <int>    bin size, [256]\n"
+	" -K <int>    filter high frequency minimizers, maybe repetitive, [256]\n"
+	" -B <int>    min bins of a match read, [4]\n"
+	" -M <int>    min minimizers of a match bin, [2]\n"
 	" -v          verbose\n"
 	"\n"
-	"for example: align multi sequence qry.fa\n"
-	"TodMapper aln -o qry.aln qry.fa\n"
+	"for example: map multi sequence qry.fa to genome ref.fa\n"
+	"TodMapper map -q qry.fa -r ref.fa -o output.txt\n"
 	);
-        return 1;
+	return 1;
 }
 
-int main_aln(int argc, char **argv)
+int main_map(int argc, char **argv)
 {
 	FileReader *fr;
 	BioSequence *seq;
-	//FILE *fp;
-	char *alnfn;
 	char **qryfn, **reffn;
-	b4i c, ksize, wsize, bsize, ver, bi;
-	u8i mask[4], qrybin_cap, ui;
-	struct MINIMIZER_V *minimizer_v;
-	struct QRYBIN_V **qrybin_v;
-	b4i **fourmerone_buffer, fourmerone_cap, bm;
-	b4i **fourmermore_buffer, fourmermore_cap;
-	b4i fourmerone_bm, fourmermore_bm, score;
-	struct QRYBIN_T qrybin_t;
-	b4i maxscore, maxbm;
-	struct REFBIN_V *refbin_v;
+	FILE *outfp;
+	char *outfn;
+	b4i c, ksize, wsize, bsize, kmax, bmin, mmin, ver, bi;
+	u1i nucleobase[256];
+	u8i mask[8], ui;
+	struct MYKMER_V **mykmer_vs;
+	struct MYKMER_V **mykmer_v2;
+	struct MYANCHOR_V **myanchor_vs;
+	struct MYANCHOR_V **myanchor_v2;
 	//
-	alnfn = NULL;
 	qryfn = (char **)malloc(sizeof(char *));
 	qryfn[0] = NULL;
 	reffn = (char **)malloc(sizeof(char *));
 	reffn[0] = NULL;
+	outfn = NULL;
 	ksize = 15;
 	wsize = 10;
 	bsize = 256;
+	kmax = 256;
+	bmin = 4;
+	mmin = 2;
 	ver = 0;
-	while((c = getopt(argc, argv, "ho:q:r:k:w:b:v")) != -1)
+	while((c = getopt(argc, argv, "hq:r:o:k:w:b:K:B:M:v")) != -1)
 	{
 		switch(c)
 		{
-			case 'o':
-				alnfn = optarg;
-				break;
 			case 'q':
 				qryfn[0] = optarg;
 				break;
 			case 'r':
 				reffn[0] = optarg;
+				break;
+			case 'o':
+				outfn = optarg;
 				break;
 			case 'k':
 				ksize = atoi(optarg);
@@ -319,277 +83,214 @@ int main_aln(int argc, char **argv)
 			case 'b':
 				bsize = atoi(optarg);
 				break;
+			case 'K':
+				kmax = atoi(optarg);
+				break;
+			case 'B':
+				bmin = atoi(optarg);
+				break;
+			case 'M':
+				mmin = atoi(optarg);
+				break;
 			case 'v':
 				ver++;
 				break;
 			default:
-				return usage_aln();
+				return usage_map();
 		}
 	}
-	//
-	mask[3] = (1ULL << 32) - 1;
-	minimizer_v = (struct MINIMIZER_V *)malloc(sizeof(struct MINIMIZER_V));
-	minimizer_v->cap = 0;
-	minimizer_v->buffer = NULL;
-	refbin_v = (struct REFBIN_V *)malloc(sizeof(struct REFBIN_V));
-	refbin_v->size = refbin_v->cap = 0;
-	refbin_v->buffer = NULL;
-	//
 	if((optind == argc && optind == 1) || (optind != argc))
 	{
-		return usage_aln();
+		return usage_map();
 	}
-	fr = open_all_filereader(1, qryfn, 0);
-	seq = init_biosequence();
-	bi = 0;
-	readseq_filereader(fr, seq);
-	fourmerone_cap = seq->seq->size - 3;
-	fourmerone_buffer = (b4i **)calloc(fourmerone_cap, sizeof(b4i *));
-	for(bm = 0; bm < fourmerone_cap; bm++)
-	{
-		fourmerone_buffer[bm] = (b4i *)calloc(256, sizeof(b4i));
-	}
-	qrybin_cap = seq->seq->size;
-	if(qrybin_cap % bsize == 0)
-	{
-		qrybin_cap = qrybin_cap - (qrybin_cap % bsize);
-		qrybin_cap = qrybin_cap / bsize;
-	}
-	else
-	{
-		qrybin_cap = qrybin_cap - (qrybin_cap % bsize);
-		qrybin_cap = qrybin_cap / bsize;
-		qrybin_cap = qrybin_cap + 1;
-	}
-	qrybin_v = (struct QRYBIN_V **)calloc(qrybin_cap, sizeof(struct QRYBIN_V *));
-	for(ui = 0; ui < qrybin_cap; ui++)
-	{
-		qrybin_v[ui] = (struct QRYBIN_V *)malloc(sizeof(struct QRYBIN_V));
-		qrybin_v[ui]->size = qrybin_v[ui]->cap = 0;
-		qrybin_v[ui]->buffer = NULL;
-	}
-	initqrybin2(seq, ksize, wsize, bsize, bi, fourmerone_buffer, qrybin_v);
-	bi++;
-	//fp = fopen(alnfn, "w");
-	while(readseq_filereader(fr, seq))
-	{
-		fourmermore_cap = seq->seq->size - 3;
-		fourmermore_buffer = (b4i **)calloc(fourmermore_cap, sizeof(b4i *));
-		minimizer_v->size = 0;
-		for(bm = 0; bm < fourmermore_cap; bm++)
-		{
-			fourmermore_buffer[bm] = (b4i *)calloc(256, sizeof(b4i));
-		}
-		updateqrybin2(seq, ksize, wsize, bi, fourmermore_buffer, minimizer_v);
-		bi++;
-		maxbm = 0;
-		for(ui = 0; ui < minimizer_v->size; ui++)
-		{
-			fourmermore_bm = minimizer_v->buffer[ui].ip & mask[3];
-			fourmerone_bm = (maxbm * bsize) + (bsize / 2) - 1;
-			maxscore = getscore(fourmerone_buffer, fourmerone_bm, fourmerone_cap, fourmermore_buffer, fourmermore_bm, fourmermore_cap);
-			for(bm = maxbm + 1; (bm * bsize) + (bsize / 2) - 1 < fourmerone_cap; bm++)
-			{
-				fourmerone_bm = (bm * bsize) + (bsize / 2) - 1;
-				score = getscore(fourmerone_buffer, fourmerone_bm, fourmerone_cap, fourmermore_buffer, fourmermore_bm, fourmermore_cap);
-				if(maxscore < score)
-				{
-					maxscore = score;
-					maxbm = bm;
-				}
-				else
-				{
-					break;
-				}
-			}
-			qrybin_t.s = minimizer_v->buffer[ui].s;
-			qrybin_push(qrybin_v[maxbm], qrybin_t);
-			//fprintf(fp, "bi = %d, fourmermore_bm = %d, maxbm = %d\n", bi, fourmermore_bm, maxbm);
-		}
-		for(bm = 0; bm < fourmermore_cap; bm++)
-		{
-			free(fourmermore_buffer[bm]);
-		}
-		free(fourmermore_buffer);
-	}
-	//fclose(fp);
-	free_biosequence(seq);
-	close_filereader(fr);
 	//
+	for(bi = 0; bi < 128; bi++)
+	{
+		nucleobase[bi] = 4;
+	}
+	nucleobase[65] = nucleobase[97] = 0;
+	nucleobase[67] = nucleobase[99] = 1;
+	nucleobase[71] = nucleobase[103] = 2;
+	nucleobase[84] = nucleobase[85] = nucleobase[116] = nucleobase[117] = 3;
+	mask[0] = (1ULL << (ksize * 2)) - 1;
+	mask[1] = (1ULL << 62) - 1;
+	mask[2] = (ksize - 1) * 2;
+	mask[3] = (1ULL << 32) - 1;
+	mask[4] = 14;
+	mask[5] = 1ULL << mask[4];
+	mask[6] = (u8i)(log(bsize) / log(2));
+	mykmer_vs = (struct MYKMER_V **)calloc(mask[5], sizeof(struct MYKMER_V *));
+	for(ui = 0; ui < mask[5]; ui++)
+	{
+		mykmer_vs[ui] = (struct MYKMER_V *)malloc(sizeof(struct MYKMER_V));
+		mykmer_vs[ui]->size = mykmer_vs[ui]->cap = 0;
+		mykmer_vs[ui]->buffer = NULL;
+		mykmer_vs[ui]->i = NULL;
+		mykmer_vs[ui]->p = NULL;
+	}
+	mykmer_v2 = (struct MYKMER_V **)calloc(256, sizeof(struct MYKMER_V *));
+	myanchor_vs = (struct MYANCHOR_V **)calloc(256, sizeof(struct MYANCHOR_V *));
+	myanchor_v2 = (struct MYANCHOR_V **)calloc(256, sizeof(struct MYANCHOR_V *));
+	for(ui = 0; ui < 256; ui++)
+	{
+		mykmer_v2[ui] = (struct MYKMER_V *)malloc(sizeof(struct MYKMER_V));
+		mykmer_v2[ui]->size = mykmer_v2[ui]->cap = 0;
+		mykmer_v2[ui]->buffer = NULL;
+		mykmer_v2[ui]->i = NULL;
+		mykmer_v2[ui]->p = NULL;
+		myanchor_vs[ui] = (struct MYANCHOR_V *)malloc(sizeof(struct MYANCHOR_V));
+		myanchor_vs[ui]->size = myanchor_vs[ui]->cap = 0;
+		myanchor_vs[ui]->buffer = NULL;
+		myanchor_v2[ui] = (struct MYANCHOR_V *)malloc(sizeof(struct MYANCHOR_V));
+		myanchor_v2[ui]->size = myanchor_v2[ui]->cap = 0;
+		myanchor_v2[ui]->buffer = NULL;
+	}
+	//
+	clock_t start0, end0, sme0 = 0;
+	double usersys0;
+	start0 = clock();
 	fr = open_all_filereader(1, reffn, 0);
+	free(reffn);
 	seq = init_biosequence();
 	bi = 0;
 	while(readseq_filereader(fr, seq))
 	{
-		getrefbin(seq, ksize, wsize, bsize, bi, refbin_v);
+		mystep1(seq, ksize, wsize, bi, mykmer_vs, nucleobase, mask);
 		bi++;
 	}
-	//fp = fopen(alnfn, "w");
-	u8i uj, maskk = 1 << ksize;
-	struct REFBIN_V **refbin_vv;
-	struct HASH_V **hash_v;
-	refbin_vv = (struct REFBIN_V **)calloc(maskk, sizeof(struct REFBIN_V *));
-	hash_v = (struct HASH_V **)calloc(maskk, sizeof(struct HASH_V *));
-	for(ui = 0; ui < maskk; ui++)
-	{
-		refbin_vv[ui] = (struct REFBIN_V *)malloc(sizeof(struct REFBIN_V));
-		refbin_vv[ui]->size = refbin_vv[ui]->cap = 0;
-		refbin_vv[ui]->buffer = NULL;
-		hash_v[ui] = (struct HASH_V *)malloc(sizeof(struct HASH_V));
-		hash_v[ui]->size = hash_v[ui]->cap = 0;
-		hash_v[ui]->buffer = NULL;
-	}
-	for(ui = 0; ui < refbin_v->size; ui++)
-	{
-		uj = refbin_v->buffer[ui].s & (maskk - 1);
-		if(refbin_vv[uj]->size == 0 || refbin_vv[uj]->buffer[refbin_vv[uj]->size - 1].s != refbin_v->buffer[ui].s || refbin_vv[uj]->buffer[refbin_vv[uj]->size - 1].ip + 1 == refbin_v->buffer[ui].ip)
-		{
-			refbin_push(refbin_vv[uj], refbin_v->buffer[ui]);
-		}
-	}
-	if(minimizer_v->cap > 0)
-	{
-		free(minimizer_v->buffer);
-	}
-	free(minimizer_v);
-	u8i *ip_buffer, ip_size, ip_cap = ui;
-	struct HASH_T hash_t;
-	ip_buffer = (u8i *)calloc(ip_cap, sizeof(u8i));
-	ip_size = 0;
-	for(ui = 0; ui < maskk; ui++)
-	{
-		if(refbin_vv[ui]->size > 1)
-		{
-			sortrefbin2(refbin_vv[ui], 0, refbin_vv[ui]->size - 1);
-			hash_t.s = refbin_vv[ui]->buffer[0].s;
-			hash_t.beg = ip_size;
-			hash_t.len = 1;
-			ip_buffer[ip_size++] = refbin_vv[ui]->buffer[0].ip;
-			for(uj = 1; uj < refbin_vv[ui]->size; uj++)
-			{
-				if(hash_t.s == refbin_vv[ui]->buffer[uj].s)
-				{
-					hash_t.len++;
-				}
-				else
-				{
-					hash_push(hash_v[ui], hash_t);
-					//sortip(ip_buffer, hash_t.beg, hash_t.beg + hash_t.len - 1);
-					hash_t.s = refbin_vv[ui]->buffer[uj].s;
-					hash_t.beg = ip_size;
-					hash_t.len = 1;
-				}
-				ip_buffer[ip_size++] = refbin_vv[ui]->buffer[uj].ip;
-			}
-			hash_push(hash_v[ui], hash_t);
-		}
-	}
-	u8i uk, ul, um;
-	struct ANCHOR_T anchor_t;
-	struct ANCHOR_V *anchor_v;
-	anchor_v = (struct ANCHOR_V *)malloc(sizeof(struct ANCHOR_V));
-	anchor_v->size = anchor_v->cap = 0;
-	anchor_v->buffer = NULL;
-	for(ui = 0; ui < qrybin_cap; ui++)
-	{
-		for(uj = 0; uj < qrybin_v[ui]->size; uj++)
-		{
-			anchor_t.x = ui;
-			uk = qrybin_v[ui]->buffer[uj].s & (maskk - 1);
-			ul = searchhash(qrybin_v[ui]->buffer[uj].s, hash_v[uk]);
-			if(ul != hash_v[uk]->size)
-			{
-				for(um = 0; um < hash_v[uk]->buffer[ul].len; um++)
-				{
-					anchor_t.y = ip_buffer[hash_v[uk]->buffer[ul].beg + um];
-					anchor_t.f = 1;
-					anchor_t.p = -1;
-					anchor_push(anchor_v, anchor_t);
-				}
-			}
-		}
-	}
-	//sortanchor(anchor_v, 0, anchor_v->size - 1);
-	getfp(anchor_v);
-	if(anchor_v->cap > 0)
-	{
-		free(anchor_v->buffer);
-	}
-	free(anchor_v);
-	for(ui = 0; ui < maskk; ui++)
-	{
-		if(refbin_vv[ui]->cap > 0)
-		{
-			free(refbin_vv[ui]->buffer);
-			free(hash_v[ui]->buffer);
-		}
-		free(refbin_vv[ui]);
-		free(hash_v[ui]);
-	}
-	free(refbin_vv);
-	free(hash_v);
-	free(ip_buffer);
-	//fclose(fp);
 	free_biosequence(seq);
 	close_filereader(fr);
+	for(ui = 0; ui < mask[5]; ui++)
+	{
+		mykmer_vs[ui]->i = (u4i *)calloc(mykmer_vs[ui]->size, sizeof(u4i));
+		mykmer_vs[ui]->p = (u4i *)calloc(mykmer_vs[ui]->size, sizeof(u4i));
+		mystep2(mykmer_vs[ui], mykmer_v2, mask);
+	}
+	end0 = clock();
+	sme0 += end0 - start0;
+	usersys0 = (double)sme0 / CLOCKS_PER_SEC;
+	fprintf(stderr, "new index = %f sec.\n", usersys0);
 	//
+	outfp = fopen(outfn, "w");
+	//clock_t start, end, sme = 0, start1, end1, sme1 = 0, start2, end2, sme2 = 0, start3, end3, sme3 = 0;
+	clock_t start, end, sme = 0;
+	//double usersys, usersys1, usersys2, usersys3;
+	double usersys;
+	start = clock();
+	fr = open_all_filereader(1, qryfn, 0);
 	free(qryfn);
-	free(reffn);
-	/*if(minimizer_v->cap > 0)
+	seq = init_biosequence();
+	//start1 = clock();
+	while(readseq_filereader(fr, seq))
 	{
-		free(minimizer_v->buffer);
-	}
-	free(minimizer_v);*/
-	for(bm = 0; bm < fourmerone_cap; bm++)
-	{
-		free(fourmerone_buffer[bm]);
-	}
-	free(fourmerone_buffer);
-	for(ui = 0; ui < qrybin_cap; ui++)
-	{
-		if(qrybin_v[ui]->cap > 0)
+		mystep3(seq, ksize, wsize, mykmer_v2[0], nucleobase, mask);
+		for(bi = 1; bi < 10; bi++)
 		{
-			free(qrybin_v[ui]->buffer);
+			readseq_filereader(fr, seq);
+			mystep3(seq, ksize, wsize, mykmer_v2[0], nucleobase, mask);
 		}
-		free(qrybin_v[ui]);
+		//end1 = clock();
+		//sme1 += end1 - start1;
+		//start2 = clock();
+		mystep4(mykmer_v2[0], kmax, myanchor_vs, mykmer_vs, mask);
+		//end2 = clock();
+		//sme2 += end2 - start2;
+		//start3 = clock();
+		mystep5(myanchor_vs, bsize, bmin, mmin, outfp, myanchor_v2, seq, mask);
+		//end3 = clock();
+		//sme3 += end3 - start3;
+		//start1 = clock();
 	}
-	free(qrybin_v);
-	if(refbin_v->cap > 0)
-	{
-		free(refbin_v->buffer);
-	}
-	free(refbin_v);
+	//end1 = clock();
+	//sme1 += end1 - start1;
+	free_biosequence(seq);
+	close_filereader(fr);
+	end = clock();
+	sme += end - start;
+	//usersys1 = (double)sme1 / CLOCKS_PER_SEC;
+	//usersys2 = (double)sme2 / CLOCKS_PER_SEC;
+	//usersys3 = (double)sme3 / CLOCKS_PER_SEC;
+	usersys = (double)sme / CLOCKS_PER_SEC;
+	//fprintf(stderr, "step1 = %f sec.\n", usersys1);
+	//fprintf(stderr, "step2 = %f sec.\n", usersys2);
+	//fprintf(stderr, "step3 = %f sec.\n", usersys3);
+	fprintf(stderr, "total = %f sec.\n", usersys);
+	fclose(outfp);
 	//
-	if(_DEBUG_LOG_)
+	for(ui = 0; ui < mask[5]; ui++)
 	{
+		if(mykmer_vs[ui]->buffer)
+		{
+			free(mykmer_vs[ui]->buffer);
+		}
+		if(mykmer_vs[ui]->i)
+		{
+			free(mykmer_vs[ui]->i);
+		}
+		if(mykmer_vs[ui]->p)
+		{
+			free(mykmer_vs[ui]->p);
+		}
+		free(mykmer_vs[ui]);
 	}
+	free(mykmer_vs);
+	for(ui = 0; ui < 256; ui++)
+	{
+		if(mykmer_v2[ui]->buffer)
+		{
+			free(mykmer_v2[ui]->buffer);
+		}
+		if(mykmer_v2[ui]->i)
+		{
+			free(mykmer_v2[ui]->i);
+		}
+		if(mykmer_v2[ui]->p)
+		{
+			free(mykmer_v2[ui]->p);
+		}
+		free(mykmer_v2[ui]);
+		if(myanchor_vs[ui]->buffer)
+		{
+			free(myanchor_vs[ui]->buffer);
+		}
+		free(myanchor_vs[ui]);
+		if(myanchor_v2[ui]->buffer)
+		{
+			free(myanchor_v2[ui]->buffer);
+		}
+		free(myanchor_v2[ui]);
+	}
+	free(mykmer_v2);
+	free(myanchor_vs);
+	free(myanchor_v2);
+	//
 	return 0;
 }
 
 int usage()
 {
-        fprintf(stdout,
-        "program: TodMapper\n"
-        "version: %s\n"
-        "author : Shigang Wu <wushigang@caas.cn>\n"
-        "usage  : TodMapper <cmd> [options]\n"
-        "\n"
-        "commands:\n"
-        " idx      index a file\n"
-        " aln      align a file\n"
-        , TOSTR(VERSION)
-        );
-        return 1;
+	fprintf(stdout,
+	"program: TodMapper\n"
+	"version: %s\n"
+	"author : Shigang Wu <wushigang@caas.cn>\n"
+	"usage  : TodMapper <cmd> [options]\n"
+	"\n"
+	"commands:\n"
+	" cnt      cnt a file\n"
+	" map      map a file\n"
+	, TOSTR(VERSION)
+	);
+	return 1;
 }
 
 int main(int argc, char **argv)
 {
 	if(argc < 2)
-        {
-                return usage();
-        }
-	if(strcasecmp("idx", argv[1]) == 0) return main_idx(argc - 1, argv + 1);
-	if(strcasecmp("aln", argv[1]) == 0) return main_aln(argc - 1, argv + 1);
+	{
+		return usage();
+	}
+	if(strcasecmp("cnt", argv[1]) == 0) return main_cnt(argc - 1, argv + 1);
+	if(strcasecmp("map", argv[1]) == 0) return main_map(argc - 1, argv + 1);
 	if(strcasecmp("-h", argv[1]) == 0) return usage();
 	if(strcasecmp("--help", argv[1]) == 0) return usage();
 	fprintf(stderr, " -- unknown command '%s' -- \n", argv[1]);
