@@ -23,9 +23,9 @@ int usage_map()
 	" -k <int>    kmer size, [15]\n"
 	" -w <int>    window size, [10]\n"
 	" -b <int>    bin size, [256]\n"
-	" -K <int>    filter high frequency minimizers, maybe repetitive, [256]\n"
-	" -B <int>    min bins of a match read, [4]\n"
-	" -M <int>    min minimizers of a match bin, [2]\n"
+	" -K <int>    filter high frequency minimizers, maybe repetitive, [1024]\n"
+	" -B <int>    min bins of a match read, [6]\n"
+	" -M <int>    min minimizers of a match bin, [1]\n"
 	" -v          verbose\n"
 	"\n"
 	"for example: map multi sequence qry.fa to genome ref.fa\n"
@@ -46,6 +46,7 @@ int main_map(int argc, char **argv)
 	u8i mask[8], ui;
 	struct MYKMER_V **mykmer_vs;
 	struct MYKMER_V **mykmer_v2;
+	struct MYKMER2_V *mykmer2_v;
 	struct MYANCHOR_V **myanchor_vs;
 	struct MYANCHOR_V **myanchor_v2;
 	//
@@ -57,9 +58,9 @@ int main_map(int argc, char **argv)
 	ksize = 15;
 	wsize = 10;
 	bsize = 256;
-	kmax = 256;
-	bmin = 4;
-	mmin = 2;
+	kmax = 1024;
+	bmin = 6;
+	mmin = 1;
 	ver = 0;
 	while((c = getopt(argc, argv, "hq:r:o:k:w:b:K:B:M:v")) != -1)
 	{
@@ -128,16 +129,22 @@ int main_map(int argc, char **argv)
 		mykmer_vs[ui]->i = NULL;
 		mykmer_vs[ui]->p = NULL;
 	}
-	mykmer_v2 = (struct MYKMER_V **)calloc(256, sizeof(struct MYKMER_V *));
-	myanchor_vs = (struct MYANCHOR_V **)calloc(256, sizeof(struct MYANCHOR_V *));
-	myanchor_v2 = (struct MYANCHOR_V **)calloc(256, sizeof(struct MYANCHOR_V *));
-	for(ui = 0; ui < 256; ui++)
+	mykmer_v2 = (struct MYKMER_V **)calloc(512, sizeof(struct MYKMER_V *));
+	for(ui = 0; ui < 512; ui++)
 	{
 		mykmer_v2[ui] = (struct MYKMER_V *)malloc(sizeof(struct MYKMER_V));
 		mykmer_v2[ui]->size = mykmer_v2[ui]->cap = 0;
 		mykmer_v2[ui]->buffer = NULL;
 		mykmer_v2[ui]->i = NULL;
 		mykmer_v2[ui]->p = NULL;
+	}
+	mykmer2_v = (struct MYKMER2_V *)malloc(sizeof(struct MYKMER2_V));
+	mykmer2_v->size = mykmer2_v->cap = 0;
+	mykmer2_v->buffer = NULL;
+	myanchor_vs = (struct MYANCHOR_V **)calloc(256, sizeof(struct MYANCHOR_V *));
+	myanchor_v2 = (struct MYANCHOR_V **)calloc(256, sizeof(struct MYANCHOR_V *));
+	for(ui = 0; ui < 256; ui++)
+	{
 		myanchor_vs[ui] = (struct MYANCHOR_V *)malloc(sizeof(struct MYANCHOR_V));
 		myanchor_vs[ui]->size = myanchor_vs[ui]->cap = 0;
 		myanchor_vs[ui]->buffer = NULL;
@@ -146,74 +153,99 @@ int main_map(int argc, char **argv)
 		myanchor_v2[ui]->buffer = NULL;
 	}
 	//
-	clock_t start0, end0, sme0 = 0;
-	double usersys0;
+	clock_t start0, end0, sme0 = 0, start01, end01, sme01 = 0, start02, end02, sme02 = 0;
+	//clock_t start0, end0, sme0 = 0;
+	double usersys0, usersys01, usersys02;
+	//double usersys0;
 	start0 = clock();
 	fr = open_all_filereader(1, reffn, 0);
 	free(reffn);
 	seq = init_biosequence();
+	start01 = clock();
 	bi = 0;
 	while(readseq_filereader(fr, seq))
 	{
-		mystep1(seq, ksize, wsize, bi, mykmer_vs, nucleobase, mask);
+		mystep1(seq->seq->string, seq->seq->size, ksize, wsize, bi, mykmer2_v, nucleobase, mask);
+		mystep12(mykmer2_v->buffer, mykmer2_v->size, mykmer_vs);
+		mykmer2_v->size = 0;
 		bi++;
 	}
+	if(mykmer2_v->buffer)
+	{
+		free(mykmer2_v->buffer);
+	}
+	free(mykmer2_v);
+	end01 = clock();
+	sme01 += end01 - start01;
 	free_biosequence(seq);
 	close_filereader(fr);
+	start02 = clock();
 	for(ui = 0; ui < mask[5]; ui++)
 	{
 		mykmer_vs[ui]->i = (u4i *)calloc(mykmer_vs[ui]->size, sizeof(u4i));
 		mykmer_vs[ui]->p = (u4i *)calloc(mykmer_vs[ui]->size, sizeof(u4i));
 		mystep2(mykmer_vs[ui], mykmer_v2, mask);
 	}
+	end02 = clock();
+	sme02 += end02 - start02;
 	end0 = clock();
 	sme0 += end0 - start0;
 	usersys0 = (double)sme0 / CLOCKS_PER_SEC;
-	fprintf(stderr, "new index = %f sec.\n", usersys0);
+	usersys01 = (double)sme01 / CLOCKS_PER_SEC;
+	usersys02 = (double)sme02 / CLOCKS_PER_SEC;
+	fprintf(stderr, "step1 = %f sec.\n", usersys01);
+	fprintf(stderr, "step2 = %f sec.\n", usersys02);
+	fprintf(stderr, "total = %f sec.\n", usersys0);
 	//
 	outfp = fopen(outfn, "w");
-	//clock_t start, end, sme = 0, start1, end1, sme1 = 0, start2, end2, sme2 = 0, start3, end3, sme3 = 0;
-	clock_t start, end, sme = 0;
-	//double usersys, usersys1, usersys2, usersys3;
-	double usersys;
+	clock_t start, end, sme = 0, start1, end1, sme1 = 0, start2, end2, sme2 = 0, start3, end3, sme3 = 0, start4, end4, sme4 = 0;
+	//clock_t start, end, sme = 0;
+	double usersys, usersys1, usersys2, usersys3, usersys4;
+	//double usersys;
 	start = clock();
 	fr = open_all_filereader(1, qryfn, 0);
 	free(qryfn);
 	seq = init_biosequence();
-	//start1 = clock();
+	start1 = clock();
 	while(readseq_filereader(fr, seq))
 	{
-		mystep3(seq, ksize, wsize, mykmer_v2[0], nucleobase, mask);
+		mystep3(seq->seq->string, seq->seq->size, ksize, wsize, 1, mykmer_v2, nucleobase, mask);
 		for(bi = 1; bi < 10; bi++)
 		{
 			readseq_filereader(fr, seq);
-			mystep3(seq, ksize, wsize, mykmer_v2[0], nucleobase, mask);
+			mystep3(seq->seq->string, seq->seq->size, ksize, wsize, bi + 1, mykmer_v2, nucleobase, mask);
 		}
-		//end1 = clock();
-		//sme1 += end1 - start1;
-		//start2 = clock();
+		end1 = clock();
+		sme1 += end1 - start1;
+		start2 = clock();
+		mystep33(mykmer_v2);
+		end2 = clock();
+		sme2 += end2 - start2;
+		start3 = clock();
 		mystep4(mykmer_v2[0], kmax, myanchor_vs, mykmer_vs, mask);
-		//end2 = clock();
-		//sme2 += end2 - start2;
-		//start3 = clock();
+		end3 = clock();
+		sme3 += end3 - start3;
+		start4 = clock();
 		mystep5(myanchor_vs, bsize, bmin, mmin, outfp, myanchor_v2, seq, mask);
-		//end3 = clock();
-		//sme3 += end3 - start3;
-		//start1 = clock();
+		end4 = clock();
+		sme4 += end4 - start4;
+		start1 = clock();
 	}
-	//end1 = clock();
-	//sme1 += end1 - start1;
+	end1 = clock();
+	sme1 += end1 - start1;
 	free_biosequence(seq);
 	close_filereader(fr);
 	end = clock();
 	sme += end - start;
-	//usersys1 = (double)sme1 / CLOCKS_PER_SEC;
-	//usersys2 = (double)sme2 / CLOCKS_PER_SEC;
-	//usersys3 = (double)sme3 / CLOCKS_PER_SEC;
+	usersys1 = (double)sme1 / CLOCKS_PER_SEC;
+	usersys2 = (double)sme2 / CLOCKS_PER_SEC;
+	usersys3 = (double)sme3 / CLOCKS_PER_SEC;
+	usersys4 = (double)sme4 / CLOCKS_PER_SEC;
 	usersys = (double)sme / CLOCKS_PER_SEC;
-	//fprintf(stderr, "step1 = %f sec.\n", usersys1);
-	//fprintf(stderr, "step2 = %f sec.\n", usersys2);
-	//fprintf(stderr, "step3 = %f sec.\n", usersys3);
+	fprintf(stderr, "step1 = %f sec.\n", usersys1);
+	fprintf(stderr, "step2 = %f sec.\n", usersys2);
+	fprintf(stderr, "step3 = %f sec.\n", usersys3);
+	fprintf(stderr, "step4 = %f sec.\n", usersys4);
 	fprintf(stderr, "total = %f sec.\n", usersys);
 	fclose(outfp);
 	//
@@ -234,7 +266,7 @@ int main_map(int argc, char **argv)
 		free(mykmer_vs[ui]);
 	}
 	free(mykmer_vs);
-	for(ui = 0; ui < 256; ui++)
+	for(ui = 0; ui < 512; ui++)
 	{
 		if(mykmer_v2[ui]->buffer)
 		{
@@ -249,6 +281,10 @@ int main_map(int argc, char **argv)
 			free(mykmer_v2[ui]->p);
 		}
 		free(mykmer_v2[ui]);
+	}
+	free(mykmer_v2);
+	for(ui = 0; ui < 256; ui++)
+	{
 		if(myanchor_vs[ui]->buffer)
 		{
 			free(myanchor_vs[ui]->buffer);
@@ -260,7 +296,6 @@ int main_map(int argc, char **argv)
 		}
 		free(myanchor_v2[ui]);
 	}
-	free(mykmer_v2);
 	free(myanchor_vs);
 	free(myanchor_v2);
 	//

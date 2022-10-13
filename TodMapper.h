@@ -31,6 +31,23 @@ struct MYKMER_V
 	u4i bl[256];
 };
 
+struct MYKMER2_V
+{
+	u8i size;
+	u8i cap;
+	struct MYKMER_T *buffer;
+};
+
+void mykmer2_push(struct MYKMER2_V *v, struct MYKMER_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct MYKMER_T *)realloc(v->buffer, sizeof(struct MYKMER_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
 void mykmer_push(struct MYKMER_V *v, struct MYKMER_T t)
 {
 	if(v->size == v->cap)
@@ -39,6 +56,18 @@ void mykmer_push(struct MYKMER_V *v, struct MYKMER_T t)
 		v->buffer = (struct MYKMER_T *)realloc(v->buffer, sizeof(struct MYKMER_T) * v->cap);
 	}
 	v->buffer[v->size++] = t;
+}
+
+void mykmer_push2(struct MYKMER_V *v, struct MYKMER_T t, u4i p)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct MYKMER_T *)realloc(v->buffer, sizeof(struct MYKMER_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+	t.p = p - t.p;
+	mykmer_push(v, t);
 }
 
 struct MYANCHOR_T
@@ -78,9 +107,10 @@ void myanchor_push2(struct MYANCHOR_V *v, struct MYANCHOR_T t)
 	}
 }
 
-void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **mykmer_v, u1i *nucleobase, u8i *mask)
+void mystep1(const char *seqseqstring, string_size_t seqseqsize, b4i ksize, b4i wsize, b4i bi, struct MYKMER2_V *mykmer2_v, u1i *nucleobase, u8i *mask)
 {
 	b4i pre_idx, min_idx, bj, bk, bl;
+	u1i z;
 	u8i key[4];
 	struct MYKMER_T pre_elm[64], min_elm;
 	//
@@ -88,9 +118,13 @@ void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **m
 	key[0] = key[1] = 0;
 	min_elm.s = UINT64_MAX;
 	bk = 0;
-	for(bj = 0; bj < seq->seq->size; bj++)
+	for(bj = 0; bj < 64; bj++)
 	{
-		nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
+		pre_elm[bj].i = bi;
+	}
+	for(bj = 0; bj < seqseqsize; bj++)
+	{
+		nucleobase[128] = nucleobase[(int)seqseqstring[bj]];
 		if(nucleobase[128] < 4)
 		{
 			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
@@ -98,10 +132,8 @@ void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **m
 			bk++;
 			if(bk >= ksize)
 			{
-				key[2] = hash64(key[0], mask[0]);
-				key[3] = hash64(key[1], mask[0]);
-				pre_elm[pre_idx].s = key[0] <= key[1] ? key[2] : key[3];
-				pre_elm[pre_idx].i = bi;
+				z = key[0] <= key[1] ? 0 : 1;
+				pre_elm[pre_idx].s = hash64(key[z], mask[0]);
 				pre_elm[pre_idx].p = (bj - ksize + 1) >> mask[6];
 				if(bk < ksize + wsize - 1)
 				{
@@ -124,14 +156,14 @@ void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **m
 					{
 						if(pre_elm[bl].s == min_elm.s)
 						{
-							mykmer_push(mykmer_v[pre_elm[bl].s & (mask[5] - 1)], pre_elm[bl]);
+							mykmer2_push(mykmer2_v, pre_elm[bl]);
 						}
 					}
 					for(bl = 0; bl < pre_idx; bl++)
 					{
 						if(pre_elm[bl].s == min_elm.s)
 						{
-							mykmer_push(mykmer_v[pre_elm[bl].s & (mask[5] - 1)], pre_elm[bl]);
+							mykmer2_push(mykmer2_v, pre_elm[bl]);
 						}
 					}
 				}
@@ -139,7 +171,7 @@ void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **m
 				{
 					if(min_elm.s >= pre_elm[pre_idx].s)
 					{
-						mykmer_push(mykmer_v[pre_elm[pre_idx].s & (mask[5] - 1)], pre_elm[pre_idx]);
+						mykmer2_push(mykmer2_v, pre_elm[pre_idx]);
 						min_elm = pre_elm[pre_idx];
 						min_idx = pre_idx;
 						pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
@@ -170,14 +202,14 @@ void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **m
 							{
 								if(pre_elm[bl].s == min_elm.s)
 								{
-									mykmer_push(mykmer_v[pre_elm[bl].s & (mask[5] - 1)], pre_elm[bl]);
+									mykmer2_push(mykmer2_v, pre_elm[bl]);
 								}
 							}
 							for(bl = 0; bl < pre_idx; bl++)
 							{
 								if(pre_elm[bl].s == min_elm.s)
 								{
-									mykmer_push(mykmer_v[pre_elm[bl].s & (mask[5] - 1)], pre_elm[bl]);
+									mykmer2_push(mykmer2_v, pre_elm[bl]);
 								}
 							}
 						}
@@ -197,6 +229,15 @@ void mystep1(BioSequence *seq, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **m
 			bk = 0;
 			min_elm.s = UINT64_MAX;
 		}
+	}
+}
+
+static void mystep12(const struct MYKMER_T *a, int n, struct MYKMER_V **mykmer_v)
+{
+	int i, mask = (1 << 14) - 1;
+	for(i = 0; i < n; i++)
+	{
+		mykmer_push(mykmer_v[a[i].s & mask], a[i]);
 	}
 }
 
@@ -261,19 +302,24 @@ void mystep2(struct MYKMER_V *mykmer_vs, struct MYKMER_V **mykmer_v2, u8i *mask)
 	}
 }
 
-void mystep3(BioSequence *seq, b4i ksize, b4i wsize, struct MYKMER_V *mykmer_v, u1i *nucleobase, u8i *mask)
+void mystep3(const char *seqseqstring, string_size_t seqseqsize, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **mykmer_v, u1i *nucleobase, u8i *mask)
 {
         b4i pre_idx, min_idx, bj, bk, bl;
-        u8i key[4], p = (seq->seq->size - ksize) >> mask[6];
-        struct MYKMER_T pre_elm[64], min_elm, mykmer_t;
+	u1i z;
+        u8i key[4], p = (seqseqsize - ksize) >> mask[6];
+        struct MYKMER_T pre_elm[64], min_elm;
 	//
         pre_idx = min_idx = 0;
         key[0] = key[1] = 0;
         min_elm.s = UINT64_MAX;
         bk = 0;
-        for(bj = 0; bj < seq->seq->size; bj++)
+	for(bj = 0; bj < 64; bj++)
+	{
+		pre_elm[bj].i = bi;
+	}
+        for(bj = 0; bj < seqseqsize; bj++)
         {
-                nucleobase[128] = nucleobase[(int)seq->seq->string[bj]];
+                nucleobase[128] = nucleobase[(int)seqseqstring[bj]];
                 if(nucleobase[128] < 4)
                 {
                         key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
@@ -281,10 +327,8 @@ void mystep3(BioSequence *seq, b4i ksize, b4i wsize, struct MYKMER_V *mykmer_v, 
                         bk++;
                         if(bk >= ksize)
                         {
-                                key[2] = hash64(key[0], mask[0]);
-                                key[3] = hash64(key[1], mask[0]);
-                                pre_elm[pre_idx].s = key[0] <= key[1] ? key[2] : key[3];
-				pre_elm[pre_idx].i = 0;
+				z = key[0] <= key[1] ? 0 : 1;
+				pre_elm[pre_idx].s = hash64(key[z], mask[0]);
                                 pre_elm[pre_idx].p = (bj - ksize + 1) >> mask[6];
                                 if(bk < ksize + wsize - 1)
                                 {
@@ -307,22 +351,14 @@ void mystep3(BioSequence *seq, b4i ksize, b4i wsize, struct MYKMER_V *mykmer_v, 
                                         {
                                                 if(pre_elm[bl].s == min_elm.s)
                                                 {
-                                                        mykmer_push(mykmer_v, pre_elm[bl]);
-							mykmer_t.s = pre_elm[bl].s;
-							mykmer_t.i = 0;
-							mykmer_t.p = p - pre_elm[bl].p;
-							mykmer_push(mykmer_v, mykmer_t);
+                                                        mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
                                                 }
                                         }
                                         for(bl = 0; bl < pre_idx; bl++)
                                         {
                                                 if(pre_elm[bl].s == min_elm.s)
                                                 {
-							mykmer_push(mykmer_v, pre_elm[bl]);
-							mykmer_t.s = pre_elm[bl].s;
-							mykmer_t.i = 0;
-							mykmer_t.p = p - pre_elm[bl].p;
-							mykmer_push(mykmer_v, mykmer_t);
+							mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
                                                 }
                                         }
                                 }
@@ -330,11 +366,7 @@ void mystep3(BioSequence *seq, b4i ksize, b4i wsize, struct MYKMER_V *mykmer_v, 
                                 {
                                         if(min_elm.s >= pre_elm[pre_idx].s)
                                         {
-						mykmer_push(mykmer_v, pre_elm[pre_idx]);
-						mykmer_t.s = pre_elm[pre_idx].s;
-						mykmer_t.i = 0;
-						mykmer_t.p = p - pre_elm[pre_idx].p;
-						mykmer_push(mykmer_v, mykmer_t);
+						mykmer_push2(mykmer_v[pre_elm[pre_idx].s & 255ULL], pre_elm[pre_idx], p);
                                                 min_elm = pre_elm[pre_idx];
                                                 min_idx = pre_idx;
                                                 pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
@@ -365,22 +397,14 @@ void mystep3(BioSequence *seq, b4i ksize, b4i wsize, struct MYKMER_V *mykmer_v, 
                                                         {
                                                                 if(pre_elm[bl].s == min_elm.s)
                                                                 {
-									mykmer_push(mykmer_v, pre_elm[bl]);
-									mykmer_t.s = pre_elm[bl].s;
-									mykmer_t.i = 0;
-									mykmer_t.p = p - pre_elm[bl].p;
-									mykmer_push(mykmer_v, mykmer_t);
+									mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
                                                                 }
                                                         }
                                                         for(bl = 0; bl < pre_idx; bl++)
                                                         {
                                                                 if(pre_elm[bl].s == min_elm.s)
                                                                 {
-									mykmer_push(mykmer_v, pre_elm[bl]);
-									mykmer_t.s = pre_elm[bl].s;
-									mykmer_t.i = 0;
-									mykmer_t.p = p - pre_elm[bl].p;
-									mykmer_push(mykmer_v, mykmer_t);
+									mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
                                                                 }
                                                         }
                                                 }
@@ -401,6 +425,90 @@ void mystep3(BioSequence *seq, b4i ksize, b4i wsize, struct MYKMER_V *mykmer_v, 
                         min_elm.s = UINT64_MAX;
                 }
         }
+}
+
+void mystep32(struct MYKMER_V *mykmer_v, b4i beg, b4i end)
+{
+        b4i left, right;
+        struct MYKMER_T mykmer_t;
+        left = beg;
+        right = end;
+        mykmer_t = mykmer_v->buffer[left];
+        while(left != right)
+        {
+                for(right = right; right > left; right--)
+                {
+                        if((mykmer_v->buffer[right].s < mykmer_t.s) || (mykmer_v->buffer[right].s == mykmer_t.s && mykmer_v->buffer[right].p < mykmer_t.p))
+                        {
+                                mykmer_v->buffer[left] = mykmer_v->buffer[right];
+                                break;
+                        }
+                }
+                for(left = left; left < right; left++)
+                {
+                        if((mykmer_v->buffer[left].s > mykmer_t.s) || (mykmer_v->buffer[left].s == mykmer_t.s && mykmer_v->buffer[left].p > mykmer_t.p))
+                        {
+                                mykmer_v->buffer[right] = mykmer_v->buffer[left];
+                                break;
+                        }
+                }
+        }
+        mykmer_v->buffer[left] = mykmer_t;
+        if(left - beg > 1)
+        {
+                mystep32(mykmer_v, beg, left - 1);
+        }
+        if(end - right > 1)
+        {
+                mystep32(mykmer_v, right + 1, end);
+        }
+}
+
+void mystep33(struct MYKMER_V **mykmer_v)
+{
+	u8i ui, uj, uk, ul;
+	struct MYKMER_T mykmer_t;
+	for(ui = 0; ui < 256; ui++)
+	{
+		for(uj = 0; uj < mykmer_v[ui]->size; uj++)
+		{
+			uk = 256 + ((mykmer_v[ui]->buffer[uj].s >> 8) & 255ULL);
+			mykmer_push(mykmer_v[uk], mykmer_v[ui]->buffer[uj]);
+		}
+		mykmer_v[ui]->size = 0;
+		for(uk = 256; uk < 512; uk++)
+		{
+			if(mykmer_v[uk]->size > 1)
+			{
+				mystep32(mykmer_v[uk], 0, mykmer_v[uk]->size - 1);
+				mykmer_t.s = mykmer_v[uk]->buffer[0].s;
+				mykmer_t.i = mykmer_v[uk]->buffer[0].i;
+				mykmer_t.p = mykmer_v[uk]->buffer[0].p;
+				for(ul = 1; ul < mykmer_v[uk]->size; ul++)
+				{
+					if(mykmer_t.s != mykmer_v[uk]->buffer[ul].s || mykmer_t.p != mykmer_v[uk]->buffer[ul].p)
+					{
+						if(!mykmer_t.i)
+						{
+							mykmer_push(mykmer_v[0], mykmer_t);
+						}
+						mykmer_t.s = mykmer_v[uk]->buffer[ul].s;
+						mykmer_t.i = mykmer_v[uk]->buffer[ul].i;
+						mykmer_t.p = mykmer_v[uk]->buffer[ul].p;
+					}
+					else
+					{
+						mykmer_t.i = mykmer_t.i == mykmer_v[uk]->buffer[ul].i ? mykmer_t.i : 0;
+					}
+				}
+				if(!mykmer_t.i)
+				{
+					mykmer_push(mykmer_v[0], mykmer_t);
+				}
+			}
+			mykmer_v[uk]->size = 0;
+		}
+	}
 }
 
 b4i mystep34(u8i s, struct MYKMER_V *mykmer_v, u4i bb, u4i bl)
@@ -512,19 +620,12 @@ void mystep5(struct MYANCHOR_V **myanchor_vs, b4i bsize, b4i bmin, b4i mmin, FIL
 			if(myanchor_v2[uj]->size > (u8i)bmin * (u8i)mmin)
 			{
 				mystep45(myanchor_v2[uj], 0, myanchor_v2[uj]->size - 1);
-			}
-			else
-			{
-				myanchor_v2[uj]->size = 0;
-			}
-			if(myanchor_v2[uj]->size > 0)
-			{
 				for(uk = 0; uk < myanchor_v2[uj]->size; uk++)
 				{
 					myanchor_push(myanchor_vs[0], myanchor_v2[uj]->buffer[uk]);
 				}
-				myanchor_v2[uj]->size = 0;
 			}
+			myanchor_v2[uj]->size = 0;
 		}
 	}
 	ui = 0;
@@ -575,11 +676,14 @@ void mystep5(struct MYANCHOR_V **myanchor_vs, b4i bsize, b4i bmin, b4i mmin, FIL
 		myanchor_push2(myanchor_v2[0], myanchor_t);
 	}
 	myanchor_vs[0]->size = 0;
-	bi = myanchor_v2[0]->size - 1;
-	fprintf(outfp, "%s %llu %llu %u %u\n", seq->tag->string, (myanchor_v2[0]->buffer[bi].x >> 32) & mask[3], (myanchor_v2[0]->buffer[bi].x & mask[3]) * bsize, (myanchor_v2[0]->buffer[bi].y + 1) * bsize, myanchor_v2[0]->buffer[bi].bcnt);
-	for(bi = bi - 1; bi >= 0 && myanchor_v2[0]->buffer[bi].bcnt == myanchor_v2[0]->buffer[bi + 1].bcnt; bi--)
+	if(myanchor_v2[0]->size > 0)
 	{
+		bi = myanchor_v2[0]->size - 1;
 		fprintf(outfp, "%s %llu %llu %u %u\n", seq->tag->string, (myanchor_v2[0]->buffer[bi].x >> 32) & mask[3], (myanchor_v2[0]->buffer[bi].x & mask[3]) * bsize, (myanchor_v2[0]->buffer[bi].y + 1) * bsize, myanchor_v2[0]->buffer[bi].bcnt);
+		for(bi = bi - 1; bi >= 0 && myanchor_v2[0]->buffer[bi].bcnt == myanchor_v2[0]->buffer[bi + 1].bcnt; bi--)
+		{
+			fprintf(outfp, "%s %llu %llu %u %u\n", seq->tag->string, (myanchor_v2[0]->buffer[bi].x >> 32) & mask[3], (myanchor_v2[0]->buffer[bi].x & mask[3]) * bsize, (myanchor_v2[0]->buffer[bi].y + 1) * bsize, myanchor_v2[0]->buffer[bi].bcnt);
+		}
+		myanchor_v2[0]->size = 0;
 	}
-	myanchor_v2[0]->size = 0;
 }
