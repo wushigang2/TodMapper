@@ -26,6 +26,9 @@ int usage_map()
 	" -K <int>    filter high frequency minimizers, maybe repetitive, [1024]\n"
 	" -B <int>    min bins of a match read, [6]\n"
 	" -M <int>    min minimizers of a match bin, [1]\n"
+	" -e <int>    min minimizer depth of a valid edge, [2]\n"
+	" -E <int>    top minimizer depth of a valid edge, [40]\n"
+	" -N <int>    retain at most N secondary alignments [9]\n"
 	" -v          verbose\n"
 	"\n"
 	"for example: map multi sequence qry.fa to genome ref.fa\n"
@@ -41,7 +44,7 @@ int main_map(int argc, char **argv)
 	char **qryfn, **reffn;
 	FILE *outfp;
 	char *outfn;
-	b4i c, ksize, wsize, bsize, kmax, bmin, mmin, ver, bi;
+	b4i c, ksize, wsize, bsize, kmax, bmin, mmin, mine, tope, outn, ver, bi, bj;
 	u1i nucleobase[256];
 	u8i mask[8], ui;
 	struct MYKMER_V **mykmer_vs;
@@ -49,6 +52,9 @@ int main_map(int argc, char **argv)
 	struct MYKMER2_V *mykmer2_v;
 	struct MYANCHOR_V **myanchor_vs;
 	struct MYANCHOR_V **myanchor_v2;
+	struct TMP1_V *tmp1_v, *tmp1_a, *tmp1_b;
+	struct TMP2_V *tmp2_v;
+	struct TMP3_V *tmp3_v;
 	//
 	qryfn = (char **)malloc(sizeof(char *));
 	qryfn[0] = NULL;
@@ -61,8 +67,11 @@ int main_map(int argc, char **argv)
 	kmax = 1024;
 	bmin = 6;
 	mmin = 1;
+	mine = 2;
+	tope = 40;
+	outn = 9;
 	ver = 0;
-	while((c = getopt(argc, argv, "hq:r:o:k:w:b:K:B:M:v")) != -1)
+	while((c = getopt(argc, argv, "hq:r:o:k:w:b:K:B:M:e:E:N:v")) != -1)
 	{
 		switch(c)
 		{
@@ -92,6 +101,15 @@ int main_map(int argc, char **argv)
 				break;
 			case 'M':
 				mmin = atoi(optarg);
+				break;
+			case 'e':
+				mine = atoi(optarg);
+				break;
+			case 'E':
+				tope = atoi(optarg);
+				break;
+			case 'N':
+				outn = atoi(optarg);
 				break;
 			case 'v':
 				ver++;
@@ -152,6 +170,13 @@ int main_map(int argc, char **argv)
 		myanchor_v2[ui]->size = myanchor_v2[ui]->cap = 0;
 		myanchor_v2[ui]->buffer = NULL;
 	}
+	tmp1_v = (struct TMP1_V *)malloc(sizeof(struct TMP1_V));
+	tmp1_a = (struct TMP1_V *)malloc(sizeof(struct TMP1_V));
+	tmp1_b = (struct TMP1_V *)malloc(sizeof(struct TMP1_V));
+	tmp2_v = (struct TMP2_V *)malloc(sizeof(struct TMP2_V));
+	tmp3_v = (struct TMP3_V *)malloc(sizeof(struct TMP3_V));
+	tmp1_v->size = tmp1_a->size = tmp1_b->size = tmp2_v->size = tmp3_v->size = 0;
+	tmp1_v->cap = tmp1_a->cap = tmp1_b->cap = tmp2_v->cap = tmp3_v->cap = 0;
 	//
 	clock_t start0, end0, sme0 = 0, start01, end01, sme01 = 0, start02, end02, sme02 = 0;
 	//clock_t start0, end0, sme0 = 0;
@@ -209,24 +234,73 @@ int main_map(int argc, char **argv)
 	start1 = clock();
 	while(readseq_filereader(fr, seq))
 	{
-		mystep3(seq->seq->string, seq->seq->size, ksize, wsize, 1, mykmer_v2, nucleobase, mask);
+		//mystep3(seq->seq->string, seq->seq->size, ksize, wsize, 1, mykmer_v2, nucleobase, mask);
+		bj = seq->seq->size;
+		get_tmp1(seq->seq->string, seq->seq->size, ksize, wsize, tmp1_v, nucleobase, mask);
+		tmp1_to_tmp2_one(tmp1_v, tmp2_v);
 		for(bi = 1; bi < 10; bi++)
 		{
 			readseq_filereader(fr, seq);
-			mystep3(seq->seq->string, seq->seq->size, ksize, wsize, bi + 1, mykmer_v2, nucleobase, mask);
+			//mystep3(seq->seq->string, seq->seq->size, ksize, wsize, bi + 1, mykmer_v2, nucleobase, mask);
+			bj = bj >= seq->seq->size ? bj : seq->seq->size;
+			get_tmp1(seq->seq->string, seq->seq->size, ksize, wsize, tmp1_v, nucleobase, mask);
+			tmp1_to_tmp2_one(tmp1_v, tmp2_v);
 		}
+		if(tmp2_v->size > 1)
+		{
+			sort_tmp2_x_y(tmp2_v, 0, tmp2_v->size - 1);
+		}
+		/*fprintf(stdout, "sort_tmp2_x_y\n");
+		for(ui = 0; ui < tmp2_v->size; ui++)
+		{
+			fprintf(stdout, "%llu x=%llu y=%llu\n", ui, tmp2_v->buffer[ui].x, tmp2_v->buffer[ui].y);
+		}*/
 		end1 = clock();
 		sme1 += end1 - start1;
 		start2 = clock();
-		mystep33(mykmer_v2);
+		//mystep33(mykmer_v2);
+		tmp2_to_tmp3(tmp2_v, mine - 1, tmp3_v);
+		if(tmp3_v->size > 1)
+		{
+			sort_tmp3_cnt(tmp3_v, 0, tmp3_v->size - 1);
+		}
+		/*fprintf(stdout, "sort_tmp3_cnt\n");
+		for(ui = 0; ui < tmp3_v->size; ui++)
+		{
+			fprintf(stdout, "%llu x=%llu y=%llu cnt=%llu\n", ui, tmp3_v->buffer[ui].x, tmp3_v->buffer[ui].y, tmp3_v->buffer[ui].cnt);
+		}*/
 		end2 = clock();
 		sme2 += end2 - start2;
 		start3 = clock();
-		mystep4(mykmer_v2[0], kmax, myanchor_vs, mykmer_vs, mask);
+		//mystep4(mykmer_v2[0], kmax, myanchor_vs, mykmer_vs, mask);
+		tmp3_to_tmp1(tmp3_v, kmax, tope, tmp1_v, tmp1_a, tmp1_b, mykmer_vs, mask);
+		if(tmp1_v->size > 1)
+		{
+			sort_tmp1_s(tmp1_v, 0, tmp1_v->size - 1);
+		}
+		/*fprintf(stdout, "sort_tmp1_s\n");
+		for(ui = 0; ui < tmp1_v->size; ui++)
+		{
+			fprintf(stdout, "%llu ip=%llu\n", ui, tmp1_v->buffer[ui].s);
+		}*/
 		end3 = clock();
 		sme3 += end3 - start3;
 		start4 = clock();
-		mystep5(myanchor_vs, bsize, bmin, mmin, outfp, myanchor_v2, seq, mask);
+		//mystep5(myanchor_vs, bsize, bmin, mmin, outfp, myanchor_v2, seq, mask);
+		tmp1_to_tmp2_two(tmp1_v, tmp2_v, bj >> mask[6]);
+		if(tmp2_v->size > 1)
+		{
+			sort_tmp2_y_x(tmp2_v, 0, tmp2_v->size - 1);
+		}
+		/*fprintf(stdout, "sort_tmp2_x\n");
+		for(ui = 0; ui < tmp2_v->size; ui++)
+		{
+			fprintf(stdout, "%llu ip=%llu score=%llu\n", ui, tmp2_v->buffer[ui].x, tmp2_v->buffer[ui].y);
+		}*/
+		if(tmp2_v->size > 0)
+		{
+			put_tmp2(tmp2_v, outn + 1, outfp, seq->tag->string, (bj >> mask[6]) + 1, mask);
+		}
 		end4 = clock();
 		sme4 += end4 - start4;
 		start1 = clock();
@@ -298,6 +372,31 @@ int main_map(int argc, char **argv)
 	}
 	free(myanchor_vs);
 	free(myanchor_v2);
+	if(tmp1_v->buffer)
+	{
+		free(tmp1_v->buffer);
+	}
+	free(tmp1_v);
+	if(tmp1_a->buffer)
+	{
+		free(tmp1_a->buffer);
+	}
+	free(tmp1_a);
+	if(tmp1_b->buffer)
+	{
+		free(tmp1_b->buffer);
+	}
+	free(tmp1_b);
+	if(tmp2_v->buffer)
+	{
+		free(tmp2_v->buffer);
+	}
+	free(tmp2_v);
+	if(tmp3_v->buffer)
+	{
+		free(tmp3_v->buffer);
+	}
+	free(tmp3_v);
 	//
 	return 0;
 }

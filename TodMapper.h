@@ -304,164 +304,164 @@ void mystep2(struct MYKMER_V *mykmer_vs, struct MYKMER_V **mykmer_v2, u8i *mask)
 
 void mystep3(const char *seqseqstring, string_size_t seqseqsize, b4i ksize, b4i wsize, b4i bi, struct MYKMER_V **mykmer_v, u1i *nucleobase, u8i *mask)
 {
-        b4i pre_idx, min_idx, bj, bk, bl;
+	b4i pre_idx, min_idx, bj, bk, bl;
 	u1i z;
-        u8i key[4], p = (seqseqsize - ksize) >> mask[6];
-        struct MYKMER_T pre_elm[64], min_elm;
+	u8i key[4], p = (seqseqsize - ksize) >> mask[6];
+	struct MYKMER_T pre_elm[64], min_elm;
 	//
-        pre_idx = min_idx = 0;
-        key[0] = key[1] = 0;
-        min_elm.s = UINT64_MAX;
-        bk = 0;
+	pre_idx = min_idx = 0;
+	key[0] = key[1] = 0;
+	min_elm.s = UINT64_MAX;
+	bk = 0;
 	for(bj = 0; bj < 64; bj++)
 	{
 		pre_elm[bj].i = bi;
 	}
-        for(bj = 0; bj < seqseqsize; bj++)
-        {
-                nucleobase[128] = nucleobase[(int)seqseqstring[bj]];
-                if(nucleobase[128] < 4)
-                {
-                        key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
-                        key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
-                        bk++;
-                        if(bk >= ksize)
-                        {
+	for(bj = 0; bj < seqseqsize; bj++)
+	{
+		nucleobase[128] = nucleobase[(int)seqseqstring[bj]];
+		if(nucleobase[128] < 4)
+		{
+			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
+			key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
+			bk++;
+			if(bk >= ksize)
+			{
 				z = key[0] <= key[1] ? 0 : 1;
 				pre_elm[pre_idx].s = hash64(key[z], mask[0]);
-                                pre_elm[pre_idx].p = (bj - ksize + 1) >> mask[6];
-                                if(bk < ksize + wsize - 1)
-                                {
-                                        if(min_elm.s >= pre_elm[pre_idx].s)
-                                        {
-                                                min_elm = pre_elm[pre_idx];
-                                                min_idx = pre_idx;
-                                        }
-                                        pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-                                }
-                                else if(bk == ksize + wsize - 1)
-                                {
-                                        if(min_elm.s >= pre_elm[pre_idx].s)
-                                        {
-                                                min_elm = pre_elm[pre_idx];
-                                                min_idx = pre_idx;
-                                        }
-                                        pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-                                        for(bl = pre_idx; bl < wsize; bl++)
-                                        {
-                                                if(pre_elm[bl].s == min_elm.s)
-                                                {
-                                                        mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
-                                                }
-                                        }
-                                        for(bl = 0; bl < pre_idx; bl++)
-                                        {
-                                                if(pre_elm[bl].s == min_elm.s)
-                                                {
+				pre_elm[pre_idx].p = (bj - ksize + 1) >> mask[6];
+				if(bk < ksize + wsize - 1)
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+					}
+					pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+				}
+				else if(bk == ksize + wsize - 1)
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+					}
+					pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+					for(bl = pre_idx; bl < wsize; bl++)
+					{
+						if(pre_elm[bl].s == min_elm.s)
+						{
 							mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
-                                                }
-                                        }
-                                }
-                                else
-                                {
-                                        if(min_elm.s >= pre_elm[pre_idx].s)
-                                        {
+						}
+					}
+					for(bl = 0; bl < pre_idx; bl++)
+					{
+						if(pre_elm[bl].s == min_elm.s)
+						{
+							mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
+						}
+					}
+				}
+				else
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
 						mykmer_push2(mykmer_v[pre_elm[pre_idx].s & 255ULL], pre_elm[pre_idx], p);
-                                                min_elm = pre_elm[pre_idx];
-                                                min_idx = pre_idx;
-                                                pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-                                        }
-                                        else
-                                        {
-                                                if(min_idx == pre_idx)
-                                                {
-                                                        min_elm.s = UINT64_MAX;
-                                                        pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-                                                        for(bl = pre_idx; bl < wsize; bl++)
-                                                        {
-                                                                if(min_elm.s >= pre_elm[bl].s)
-                                                                {
-                                                                        min_elm = pre_elm[bl];
-                                                                        min_idx = bl;
-                                                                }
-                                                        }
-                                                        for(bl = 0; bl < pre_idx; bl++)
-                                                        {
-                                                                if(min_elm.s >= pre_elm[bl].s)
-                                                                {
-                                                                        min_elm = pre_elm[bl];
-                                                                        min_idx = bl;
-                                                                }
-                                                        }
-                                                        for(bl = pre_idx; bl < wsize; bl++)
-                                                        {
-                                                                if(pre_elm[bl].s == min_elm.s)
-                                                                {
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+						pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+					}
+					else
+					{
+						if(min_idx == pre_idx)
+						{
+							min_elm.s = UINT64_MAX;
+							pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+							for(bl = pre_idx; bl < wsize; bl++)
+							{
+								if(min_elm.s >= pre_elm[bl].s)
+								{
+									min_elm = pre_elm[bl];
+									min_idx = bl;
+								}
+							}
+							for(bl = 0; bl < pre_idx; bl++)
+							{
+								if(min_elm.s >= pre_elm[bl].s)
+								{
+									min_elm = pre_elm[bl];
+									min_idx = bl;
+								}
+							}
+							for(bl = pre_idx; bl < wsize; bl++)
+							{
+								if(pre_elm[bl].s == min_elm.s)
+								{
 									mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
-                                                                }
-                                                        }
-                                                        for(bl = 0; bl < pre_idx; bl++)
-                                                        {
-                                                                if(pre_elm[bl].s == min_elm.s)
-                                                                {
+								}
+							}
+							for(bl = 0; bl < pre_idx; bl++)
+							{
+								if(pre_elm[bl].s == min_elm.s)
+								{
 									mykmer_push2(mykmer_v[pre_elm[bl].s & 255ULL], pre_elm[bl], p);
-                                                                }
-                                                        }
-                                                }
-                                                else
-                                                {
-                                                        pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
-                                                }
-                                        }
-                                }
-                        }
-                        else
-                        {
-                        }
-                }
-                else
-                {
-                        bk = 0;
-                        min_elm.s = UINT64_MAX;
-                }
-        }
+								}
+							}
+						}
+						else
+						{
+							pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+						}
+					}
+				}
+			}
+			else
+			{
+			}
+		}
+		else
+		{
+			bk = 0;
+			min_elm.s = UINT64_MAX;
+		}
+	}
 }
 
 void mystep32(struct MYKMER_V *mykmer_v, b4i beg, b4i end)
 {
-        b4i left, right;
-        struct MYKMER_T mykmer_t;
-        left = beg;
-        right = end;
-        mykmer_t = mykmer_v->buffer[left];
-        while(left != right)
-        {
-                for(right = right; right > left; right--)
-                {
-                        if((mykmer_v->buffer[right].s < mykmer_t.s) || (mykmer_v->buffer[right].s == mykmer_t.s && mykmer_v->buffer[right].p < mykmer_t.p))
-                        {
-                                mykmer_v->buffer[left] = mykmer_v->buffer[right];
-                                break;
-                        }
-                }
-                for(left = left; left < right; left++)
-                {
-                        if((mykmer_v->buffer[left].s > mykmer_t.s) || (mykmer_v->buffer[left].s == mykmer_t.s && mykmer_v->buffer[left].p > mykmer_t.p))
-                        {
-                                mykmer_v->buffer[right] = mykmer_v->buffer[left];
-                                break;
-                        }
-                }
-        }
-        mykmer_v->buffer[left] = mykmer_t;
-        if(left - beg > 1)
-        {
-                mystep32(mykmer_v, beg, left - 1);
-        }
-        if(end - right > 1)
-        {
-                mystep32(mykmer_v, right + 1, end);
-        }
+	b4i left, right;
+	struct MYKMER_T mykmer_t;
+	left = beg;
+	right = end;
+	mykmer_t = mykmer_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if((mykmer_v->buffer[right].s < mykmer_t.s) || (mykmer_v->buffer[right].s == mykmer_t.s && mykmer_v->buffer[right].p < mykmer_t.p))
+			{
+				mykmer_v->buffer[left] = mykmer_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if((mykmer_v->buffer[left].s > mykmer_t.s) || (mykmer_v->buffer[left].s == mykmer_t.s && mykmer_v->buffer[left].p > mykmer_t.p))
+			{
+				mykmer_v->buffer[right] = mykmer_v->buffer[left];
+				break;
+			}
+		}
+	}
+	mykmer_v->buffer[left] = mykmer_t;
+	if(left - beg > 1)
+	{
+		mystep32(mykmer_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		mystep32(mykmer_v, right + 1, end);
+	}
 }
 
 void mystep33(struct MYKMER_V **mykmer_v)
@@ -567,39 +567,39 @@ void mystep4(struct MYKMER_V *mykmer_v2, b4i kmax, struct MYANCHOR_V **myanchor_
 
 void mystep45(struct MYANCHOR_V *myanchor_v, b4i beg, b4i end)
 {
-        b4i left, right;
-        struct MYANCHOR_T myanchor_t;
-        left = beg;
-        right = end;
-        myanchor_t = myanchor_v->buffer[left];
-        while(left != right)
-        {
-                for(right = right; right > left; right--)
-                {
+	b4i left, right;
+	struct MYANCHOR_T myanchor_t;
+	left = beg;
+	right = end;
+	myanchor_t = myanchor_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
 			if(myanchor_v->buffer[right].x < myanchor_t.x || (myanchor_v->buffer[right].x == myanchor_t.x && myanchor_v->buffer[right].y < myanchor_t.y))
-                        {
-                                myanchor_v->buffer[left] = myanchor_v->buffer[right];
-                                break;
-                        }
-                }
-                for(left = left; left < right; left++)
-                {
+			{
+				myanchor_v->buffer[left] = myanchor_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
 			if(myanchor_v->buffer[left].x > myanchor_t.x || (myanchor_v->buffer[left].x == myanchor_t.x && myanchor_v->buffer[left].y > myanchor_t.y))
-                        {
-                                myanchor_v->buffer[right] = myanchor_v->buffer[left];
-                                break;
-                        }
-                }
-        }
-        myanchor_v->buffer[left] = myanchor_t;
-        if(left - beg > 1)
-        {
-                mystep45(myanchor_v, beg, left - 1);
-        }
-        if(end - right > 1)
-        {
-                mystep45(myanchor_v, right + 1, end);
-        }
+			{
+				myanchor_v->buffer[right] = myanchor_v->buffer[left];
+				break;
+			}
+		}
+	}
+	myanchor_v->buffer[left] = myanchor_t;
+	if(left - beg > 1)
+	{
+		mystep45(myanchor_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		mystep45(myanchor_v, right + 1, end);
+	}
 }
 
 void mystep5(struct MYANCHOR_V **myanchor_vs, b4i bsize, b4i bmin, b4i mmin, FILE *outfp, struct MYANCHOR_V **myanchor_v2, BioSequence *seq, u8i *mask)
@@ -686,4 +686,505 @@ void mystep5(struct MYANCHOR_V **myanchor_vs, b4i bsize, b4i bmin, b4i mmin, FIL
 		}
 		myanchor_v2[0]->size = 0;
 	}
+}
+
+struct TMP1_T
+{
+	u8i s;
+};
+
+struct TMP1_V
+{
+	u8i size;
+	u8i cap;
+	struct TMP1_T *buffer;
+};
+
+void tmp1_push(struct TMP1_V *v, struct TMP1_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct TMP1_T *)realloc(v->buffer, sizeof(struct TMP1_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
+struct TMP2_T
+{
+	u8i x;
+	u8i y;
+};
+
+struct TMP2_V
+{
+	u8i size;
+	u8i cap;
+	struct TMP2_T *buffer;
+};
+
+void tmp2_push(struct TMP2_V *v, struct TMP2_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct TMP2_T *)realloc(v->buffer, sizeof(struct TMP2_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
+struct TMP3_T
+{
+	u8i x;
+	u8i y;
+	u8i cnt;
+};
+
+struct TMP3_V
+{
+	u8i size;
+	u8i cap;
+	struct TMP3_T *buffer;
+};
+
+void tmp3_push(struct TMP3_V *v, struct TMP3_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct TMP3_T *)realloc(v->buffer, sizeof(struct TMP3_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
+void sort_tmp2_x_y(struct TMP2_V *tmp2_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP2_T tmp2_t;
+	left = beg;
+	right = end;
+	tmp2_t = tmp2_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if((tmp2_v->buffer[right].x < tmp2_t.x) || (tmp2_v->buffer[right].x == tmp2_t.x && tmp2_v->buffer[right].y < tmp2_t.y))
+			{
+				tmp2_v->buffer[left] = tmp2_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if((tmp2_v->buffer[left].x > tmp2_t.x) || (tmp2_v->buffer[left].x == tmp2_t.x && tmp2_v->buffer[left].y > tmp2_t.y))
+			{
+				tmp2_v->buffer[right] = tmp2_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp2_v->buffer[left] = tmp2_t;
+	if(left - beg > 1)
+	{
+		sort_tmp2_x_y(tmp2_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp2_x_y(tmp2_v, right + 1, end);
+	}
+}
+
+void sort_tmp3_cnt(struct TMP3_V *tmp3_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP3_T tmp3_t;
+	left = beg;
+	right = end;
+	tmp3_t = tmp3_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if(tmp3_v->buffer[right].cnt > tmp3_t.cnt)
+			{
+				tmp3_v->buffer[left] = tmp3_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if(tmp3_v->buffer[left].cnt < tmp3_t.cnt)
+			{
+				tmp3_v->buffer[right] = tmp3_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp3_v->buffer[left] = tmp3_t;
+	if(left - beg > 1)
+	{
+		sort_tmp3_cnt(tmp3_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp3_cnt(tmp3_v, right + 1, end);
+	}
+}
+
+void sort_tmp1_s(struct TMP1_V *tmp1_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP1_T tmp1_t;
+	left = beg;
+	right = end;
+	tmp1_t = tmp1_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if(tmp1_v->buffer[right].s < tmp1_t.s)
+			{
+				tmp1_v->buffer[left] = tmp1_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if(tmp1_v->buffer[left].s > tmp1_t.s)
+			{
+				tmp1_v->buffer[right] = tmp1_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp1_v->buffer[left] = tmp1_t;
+	if(left - beg > 1)
+	{
+		sort_tmp1_s(tmp1_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp1_s(tmp1_v, right + 1, end);
+	}
+}
+
+void sort_tmp2_y_x(struct TMP2_V *tmp2_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP2_T tmp2_t;
+	left = beg;
+	right = end;
+	tmp2_t = tmp2_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if((tmp2_v->buffer[right].y > tmp2_t.y) || (tmp2_v->buffer[right].y == tmp2_t.y && tmp2_v->buffer[right].x < tmp2_t.x))
+			{
+				tmp2_v->buffer[left] = tmp2_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if((tmp2_v->buffer[left].y < tmp2_t.y) || (tmp2_v->buffer[left].y == tmp2_t.y && tmp2_v->buffer[left].x > tmp2_t.x))
+			{
+				tmp2_v->buffer[right] = tmp2_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp2_v->buffer[left] = tmp2_t;
+	if(left - beg > 1)
+	{
+		sort_tmp2_y_x(tmp2_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp2_y_x(tmp2_v, right + 1, end);
+	}
+}
+
+void get_tmp1(const char *seqseqstring, string_size_t seqseqsize, b4i ksize, b4i wsize, struct TMP1_V *tmp1_v, u1i *nucleobase, u8i *mask)
+{
+	b4i pre_idx, min_idx, bj, bk, bl;
+	u1i z;
+	u8i key[2];
+	struct TMP1_T pre_elm[64], min_elm;
+	//
+	pre_idx = min_idx = 0;
+	key[0] = key[1] = 0;
+	min_elm.s = UINT64_MAX;
+	bk = 0;
+	for(bj = 0; bj < seqseqsize; bj++)
+	{
+		nucleobase[128] = nucleobase[(int)seqseqstring[bj]];
+		if(nucleobase[128] < 4)
+		{
+			key[0] = ((key[0] << 2) & mask[0]) | nucleobase[128];
+			key[1] = ((key[1] >> 2) & mask[1]) | ((nucleobase[128] ^ 3ULL) << mask[2]);
+			bk++;
+			if(bk >= ksize)
+			{
+				z = key[0] <= key[1] ? 0 : 1;
+				pre_elm[pre_idx].s = hash64(key[z], mask[0]);
+				if(bk < ksize + wsize - 1)
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+					}
+					pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+				}
+				else if(bk == ksize + wsize - 1)
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+					}
+					pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+					for(bl = pre_idx; bl < wsize; bl++)
+					{
+						if(pre_elm[bl].s == min_elm.s)
+						{
+							tmp1_push(tmp1_v, pre_elm[bl]);
+						}
+					}
+					for(bl = 0; bl < pre_idx; bl++)
+					{
+						if(pre_elm[bl].s == min_elm.s)
+						{
+							tmp1_push(tmp1_v, pre_elm[bl]);
+						}
+					}
+				}
+				else
+				{
+					if(min_elm.s >= pre_elm[pre_idx].s)
+					{
+						tmp1_push(tmp1_v, pre_elm[pre_idx]);
+						min_elm = pre_elm[pre_idx];
+						min_idx = pre_idx;
+						pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+					}
+					else
+					{
+						if(min_idx == pre_idx)
+						{
+							min_elm.s = UINT64_MAX;
+							pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+							for(bl = pre_idx; bl < wsize; bl++)
+							{
+								if(min_elm.s >= pre_elm[bl].s)
+								{
+									min_elm = pre_elm[bl];
+									min_idx = bl;
+								}
+							}
+							for(bl = 0; bl < pre_idx; bl++)
+							{
+								if(min_elm.s >= pre_elm[bl].s)
+								{
+									min_elm = pre_elm[bl];
+									min_idx = bl;
+								}
+							}
+							for(bl = pre_idx; bl < wsize; bl++)
+							{
+								if(pre_elm[bl].s == min_elm.s)
+								{
+									tmp1_push(tmp1_v, pre_elm[bl]);
+								}
+							}
+							for(bl = 0; bl < pre_idx; bl++)
+							{
+								if(pre_elm[bl].s == min_elm.s)
+								{
+									tmp1_push(tmp1_v, pre_elm[bl]);
+								}
+							}
+						}
+						else
+						{
+							pre_idx = pre_idx == wsize - 1 ? 0 : pre_idx + 1;
+						}
+					}
+				}
+			}
+			else
+			{
+			}
+		}
+		else
+		{
+			bk = 0;
+			min_elm.s = UINT64_MAX;
+		}
+	}
+}
+
+void tmp1_to_tmp2_one(struct TMP1_V *tmp1_v, struct TMP2_V *tmp2_v)
+{
+	u8i ui;
+	struct TMP2_T tmp2_t;
+	for(ui = 1; ui < tmp1_v->size; ui++)
+	{
+		if(tmp1_v->buffer[ui - 1].s != tmp1_v->buffer[ui].s)
+		{
+			if(tmp1_v->buffer[ui - 1].s < tmp1_v->buffer[ui].s)
+			{
+				tmp2_t.x = tmp1_v->buffer[ui - 1].s;
+				tmp2_t.y = tmp1_v->buffer[ui].s;
+			}
+			else
+			{
+				tmp2_t.x = tmp1_v->buffer[ui].s;
+				tmp2_t.y = tmp1_v->buffer[ui - 1].s;
+			}
+			tmp2_push(tmp2_v, tmp2_t);
+		}
+	}
+	tmp1_v->size = 0;
+}
+
+void tmp2_to_tmp3(struct TMP2_V *tmp2_v, u8i mine, struct TMP3_V *tmp3_v)
+{
+	u8i ui;
+	struct TMP3_T tmp3_t;
+	ui = 0;
+	tmp3_t.x = tmp2_v->buffer[ui].x;
+	tmp3_t.y = tmp2_v->buffer[ui].y;
+	tmp3_t.cnt = 1;
+	for(ui = 1; ui < tmp2_v->size; ui++)
+	{
+		if(tmp3_t.x == tmp2_v->buffer[ui].x && tmp3_t.y == tmp2_v->buffer[ui].y)
+		{
+			tmp3_t.cnt++;
+		}
+		else
+		{
+			if(tmp3_t.cnt > mine)
+			{
+				tmp3_push(tmp3_v, tmp3_t);
+			}
+			tmp3_t.x = tmp2_v->buffer[ui].x;
+			tmp3_t.y = tmp2_v->buffer[ui].y;
+			tmp3_t.cnt = 1;
+		}
+	}
+	if(tmp3_t.cnt > mine)
+	{
+		tmp3_push(tmp3_v, tmp3_t);
+	}
+	tmp2_v->size = 0;
+}
+
+void tmp3_to_tmp1(struct TMP3_V *tmp3_v, b4i kmax, u8i tope, struct TMP1_V *tmp1_v, struct TMP1_V *tmp1_a, struct TMP1_V *tmp1_b, struct MYKMER_V **mykmer_vs, u8i *mask)
+{
+	b4i z;
+	u8i ui, uj[2], uk[2], ul[2], um[2], un[2], uo;
+	struct TMP1_T tmp1_t;
+	uo = 0;
+	for(ui = 0; ui < tmp3_v->size; ui = uo == tope ? tmp3_v->size : ui + 1)
+	{
+		tmp1_a->size = 0;
+		z = 0;
+		uj[z] = tmp3_v->buffer[ui].x & (mask[5] - 1);
+		uk[z] = (tmp3_v->buffer[ui].x >> mask[4]) & 255ULL;
+		ul[z] = mykmer_vs[uj[z]]->bl[uk[z]] ? (u8i)mystep34(tmp3_v->buffer[ui].x, mykmer_vs[uj[z]], mykmer_vs[uj[z]]->bb[uk[z]], mykmer_vs[uj[z]]->bl[uk[z]]) : mykmer_vs[uj[z]]->bb[uk[z]] + mykmer_vs[uj[z]]->bl[uk[z]];
+		if(ul[z] != mykmer_vs[uj[z]]->bb[uk[z]] + mykmer_vs[uj[z]]->bl[uk[z]] && mykmer_vs[uj[z]]->buffer[ul[z]].p <= (u4i)kmax)
+		{
+			um[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i + mykmer_vs[uj[z]]->buffer[ul[z]].p;
+			for(un[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i; un[z] < um[z]; un[z]++)
+			{
+				tmp1_t.s = ((u8i)mykmer_vs[uj[z]]->i[un[z]] << 32) | mykmer_vs[uj[z]]->p[un[z]];
+				tmp1_push(tmp1_a, tmp1_t);
+			}
+			tmp1_b->size = 0;
+			z = 1;
+			uj[z] = tmp3_v->buffer[ui].y & (mask[5] - 1);
+			uk[z] = (tmp3_v->buffer[ui].y >> mask[4]) & 255ULL;
+			ul[z] = mykmer_vs[uj[z]]->bl[uk[z]] ? (u8i)mystep34(tmp3_v->buffer[ui].y, mykmer_vs[uj[z]], mykmer_vs[uj[z]]->bb[uk[z]], mykmer_vs[uj[z]]->bl[uk[z]]) : mykmer_vs[uj[z]]->bb[uk[z]] + mykmer_vs[uj[z]]->bl[uk[z]];
+			if(ul[z] != mykmer_vs[uj[z]]->bb[uk[z]] + mykmer_vs[uj[z]]->bl[uk[z]] && mykmer_vs[uj[z]]->buffer[ul[z]].p <= (u4i)kmax)
+			{
+				um[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i + mykmer_vs[uj[z]]->buffer[ul[z]].p;
+				for(un[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i; un[z] < um[z]; un[z]++)
+				{
+					tmp1_t.s = ((u8i)mykmer_vs[uj[z]]->i[un[z]] << 32) | mykmer_vs[uj[z]]->p[un[z]];
+					tmp1_push(tmp1_b, tmp1_t);
+				}
+				uj[0] = uj[1] = 0;
+				while(uj[0] < tmp1_a->size && uj[1] < tmp1_b->size)
+				{
+					if(tmp1_a->buffer[uj[0]].s < tmp1_b->buffer[uj[1]].s)
+					{
+						uj[0]++;
+					}
+					else if(tmp1_a->buffer[uj[0]].s > tmp1_b->buffer[uj[1]].s)
+					{
+						uj[1]++;
+					}
+					else
+					{
+						tmp1_push(tmp1_v, tmp1_a->buffer[uj[0]]);
+						uj[0]++;
+						uj[1]++;
+					}
+				}
+				uo++;
+			}
+		}
+	}
+	tmp3_v->size = 0;
+}
+
+void tmp1_to_tmp2_two(struct TMP1_V *tmp1_v, struct TMP2_V *tmp2_v, b4i bj)
+{
+	u8i ub, ue, ui, uj[2];
+	struct TMP2_T tmp2_t;
+	uj[0] = ++bj;
+	uj[1] = ++bj;
+	ub = ue = 0;
+	while(ue < tmp1_v->size)
+	{
+		while(tmp1_v->buffer[ue].s - tmp1_v->buffer[ub].s + 1 > uj[0])
+		{
+			ub++;
+		}
+		while(tmp1_v->buffer[ue].s - tmp1_v->buffer[ub].s + 1 < uj[1] && ue < tmp1_v->size)
+		{
+			ue++;
+		}
+		tmp2_t.x = tmp1_v->buffer[ub].s;
+		tmp2_t.y = 1;
+		for(ui = ub + 1; ui < ue; ui++)
+		{
+			if(tmp1_v->buffer[ui].s != tmp1_v->buffer[ui - 1].s)
+			{
+				tmp2_t.y++;
+			}
+		}
+		tmp2_push(tmp2_v, tmp2_t);
+	}
+	tmp1_v->size = 0;
+}
+
+void put_tmp2(struct TMP2_V *tmp2_v, u8i outn, FILE *outfp, char *seqtagstring, u8i bj, u8i *mask)
+{
+	u8i ui, uj, uk;
+	fprintf(outfp, "%s %llu %llu %llu\n", seqtagstring, tmp2_v->buffer[0].x >> 32, (tmp2_v->buffer[0].x & mask[3]) << mask[6], tmp2_v->buffer[0].y);
+	uj = 1;
+	uk = tmp2_v->buffer[0].x;
+	for(ui = 1; ui < tmp2_v->size; ui = uj < outn || tmp2_v->buffer[ui].y == tmp2_v->buffer[0].y ? ui + 1 : tmp2_v->size)
+	{
+		if(tmp2_v->buffer[ui].x - uk + 1 > bj)
+		{
+			fprintf(outfp, "%s %llu %llu %llu\n", seqtagstring, tmp2_v->buffer[ui].x >> 32, (tmp2_v->buffer[ui].x & mask[3]) << mask[6], tmp2_v->buffer[ui].y);
+			uj++;
+			uk = tmp2_v->buffer[ui].x;
+		}
+	}
+	tmp2_v->size = 0;
 }
