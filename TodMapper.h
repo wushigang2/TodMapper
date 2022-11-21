@@ -688,6 +688,35 @@ void mystep5(struct MYANCHOR_V **myanchor_vs, b4i bsize, b4i bmin, b4i mmin, FIL
 	}
 }
 
+struct TMP0_T
+{
+	char *name;
+};
+
+struct TMP0_V
+{
+	u8i size;
+	u8i cap;
+	struct TMP0_T *buffer;
+};
+
+void tmp0_push(struct TMP0_V *v, char *t)
+{
+	u8i ui;
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct TMP0_T *)realloc(v->buffer, sizeof(struct TMP0_T) * v->cap);
+	}
+	v->buffer[v->size].name = (char *)calloc(256, sizeof(char));
+	for(ui = 0; ui < 255 && t[ui] != 0; ui++)
+	{
+		v->buffer[v->size].name[ui] = t[ui];
+	}
+	v->buffer[v->size].name[ui] = 0;
+	v->size++;
+}
+
 struct TMP1_T
 {
 	u8i s;
@@ -753,6 +782,31 @@ void tmp3_push(struct TMP3_V *v, struct TMP3_T t)
 	{
 		v->cap = v->cap ? v->cap << 1 : 2;
 		v->buffer = (struct TMP3_T *)realloc(v->buffer, sizeof(struct TMP3_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
+struct TMP4_T
+{
+	u4i i;
+	u4i bbeg;
+	u4i blen;
+	u4i kcnt;
+};
+
+struct TMP4_V
+{
+	u8i size;
+	u8i cap;
+	struct TMP4_T *buffer;
+};
+
+void tmp4_push(struct TMP4_V *v, struct TMP4_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct TMP4_T *)realloc(v->buffer, sizeof(struct TMP4_T) * v->cap);
 	}
 	v->buffer[v->size++] = t;
 }
@@ -868,6 +922,43 @@ void sort_tmp1_s(struct TMP1_V *tmp1_v, b4i beg, b4i end)
 	}
 }
 
+void sort_tmp2_x(struct TMP2_V *tmp2_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP2_T tmp2_t;
+	left = beg;
+	right = end;
+	tmp2_t = tmp2_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if(tmp2_v->buffer[right].x < tmp2_t.x)
+			{
+				tmp2_v->buffer[left] = tmp2_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if(tmp2_v->buffer[left].x > tmp2_t.x)
+			{
+				tmp2_v->buffer[right] = tmp2_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp2_v->buffer[left] = tmp2_t;
+	if(left - beg > 1)
+	{
+		sort_tmp2_x(tmp2_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp2_x(tmp2_v, right + 1, end);
+	}
+}
+
 void sort_tmp2_y_x(struct TMP2_V *tmp2_v, b4i beg, b4i end)
 {
 	b4i left, right;
@@ -903,6 +994,80 @@ void sort_tmp2_y_x(struct TMP2_V *tmp2_v, b4i beg, b4i end)
 	{
 		sort_tmp2_y_x(tmp2_v, right + 1, end);
 	}
+}
+
+void sort_tmp4_blen_kcnt(struct TMP4_V *tmp4_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP4_T tmp4_t;
+	left = beg;
+	right = end;
+	tmp4_t = tmp4_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if((tmp4_v->buffer[right].blen > tmp4_t.blen) || (tmp4_v->buffer[right].blen == tmp4_t.blen && tmp4_v->buffer[right].kcnt > tmp4_t.kcnt))
+			{
+				tmp4_v->buffer[left] = tmp4_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if((tmp4_v->buffer[left].blen < tmp4_t.blen) || (tmp4_v->buffer[left].blen == tmp4_t.blen && tmp4_v->buffer[left].kcnt < tmp4_t.kcnt))
+			{
+				tmp4_v->buffer[right] = tmp4_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp4_v->buffer[left] = tmp4_t;
+	if(left - beg > 1)
+	{
+		sort_tmp4_blen_kcnt(tmp4_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp4_blen_kcnt(tmp4_v, right + 1, end);
+	}
+}
+
+void sort_tmp4_kcnt_blen(struct TMP4_V *tmp4_v, b4i beg, b4i end)
+{
+        b4i left, right;
+        struct TMP4_T tmp4_t;
+        left = beg;
+        right = end;
+        tmp4_t = tmp4_v->buffer[left];
+        while(left != right)
+        {
+                for(right = right; right > left; right--)
+                {
+                        if((tmp4_v->buffer[right].kcnt > tmp4_t.kcnt) || (tmp4_v->buffer[right].kcnt == tmp4_t.kcnt && tmp4_v->buffer[right].blen < tmp4_t.blen))
+                        {
+                                tmp4_v->buffer[left] = tmp4_v->buffer[right];
+                                break;
+                        }
+                }
+                for(left = left; left < right; left++)
+                {
+                        if((tmp4_v->buffer[left].kcnt < tmp4_t.kcnt) || (tmp4_v->buffer[left].kcnt == tmp4_t.kcnt && tmp4_v->buffer[left].blen > tmp4_t.blen))
+                        {
+                                tmp4_v->buffer[right] = tmp4_v->buffer[left];
+                                break;
+                        }
+                }
+        }
+        tmp4_v->buffer[left] = tmp4_t;
+        if(left - beg > 1)
+        {
+                sort_tmp4_kcnt_blen(tmp4_v, beg, left - 1);
+        }
+        if(end - right > 1)
+        {
+                sort_tmp4_kcnt_blen(tmp4_v, right + 1, end);
+        }
 }
 
 void get_tmp1(const char *seqseqstring, string_size_t seqseqsize, b4i ksize, b4i wsize, struct TMP1_V *tmp1_v, u1i *nucleobase, u8i *mask)
@@ -1051,6 +1216,10 @@ void tmp1_to_tmp2_one(struct TMP1_V *tmp1_v, struct TMP2_V *tmp2_v)
 
 void tmp2_to_tmp3(struct TMP2_V *tmp2_v, u8i mine, struct TMP3_V *tmp3_v)
 {
+	if(tmp2_v->size == 0)
+	{
+		return;
+	}
 	u8i ui;
 	struct TMP3_T tmp3_t;
 	ui = 0;
@@ -1081,15 +1250,15 @@ void tmp2_to_tmp3(struct TMP2_V *tmp2_v, u8i mine, struct TMP3_V *tmp3_v)
 	tmp2_v->size = 0;
 }
 
-void tmp3_to_tmp1(struct TMP3_V *tmp3_v, b4i kmax, u8i tope, struct TMP1_V *tmp1_v, struct TMP1_V *tmp1_a, struct TMP1_V *tmp1_b, struct MYKMER_V **mykmer_vs, u8i *mask)
+void tmp3_to_tmp2(struct TMP3_V *tmp3_v, b4i kmax, u8i tope, struct TMP2_V *tmp2_v, struct TMP2_V *tmp2_a, struct TMP2_V *tmp2_b, struct MYKMER_V **mykmer_vs, u8i *mask)
 {
 	b4i z;
 	u8i ui, uj[2], uk[2], ul[2], um[2], un[2], uo;
-	struct TMP1_T tmp1_t;
+	struct TMP2_T tmp2_t;
 	uo = 0;
 	for(ui = 0; ui < tmp3_v->size; ui = uo == tope ? tmp3_v->size : ui + 1)
 	{
-		tmp1_a->size = 0;
+		tmp2_a->size = 0;
 		z = 0;
 		uj[z] = tmp3_v->buffer[ui].x & (mask[5] - 1);
 		uk[z] = (tmp3_v->buffer[ui].x >> mask[4]) & 255ULL;
@@ -1099,10 +1268,11 @@ void tmp3_to_tmp1(struct TMP3_V *tmp3_v, b4i kmax, u8i tope, struct TMP1_V *tmp1
 			um[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i + mykmer_vs[uj[z]]->buffer[ul[z]].p;
 			for(un[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i; un[z] < um[z]; un[z]++)
 			{
-				tmp1_t.s = ((u8i)mykmer_vs[uj[z]]->i[un[z]] << 32) | mykmer_vs[uj[z]]->p[un[z]];
-				tmp1_push(tmp1_a, tmp1_t);
+				tmp2_t.x = ((u8i)mykmer_vs[uj[z]]->i[un[z]] << 32) | mykmer_vs[uj[z]]->p[un[z]];
+				tmp2_t.y = tmp3_v->buffer[ui].x;
+				tmp2_push(tmp2_a, tmp2_t);
 			}
-			tmp1_b->size = 0;
+			tmp2_b->size = 0;
 			z = 1;
 			uj[z] = tmp3_v->buffer[ui].y & (mask[5] - 1);
 			uk[z] = (tmp3_v->buffer[ui].y >> mask[4]) & 255ULL;
@@ -1112,23 +1282,28 @@ void tmp3_to_tmp1(struct TMP3_V *tmp3_v, b4i kmax, u8i tope, struct TMP1_V *tmp1
 				um[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i + mykmer_vs[uj[z]]->buffer[ul[z]].p;
 				for(un[z] = mykmer_vs[uj[z]]->buffer[ul[z]].i; un[z] < um[z]; un[z]++)
 				{
-					tmp1_t.s = ((u8i)mykmer_vs[uj[z]]->i[un[z]] << 32) | mykmer_vs[uj[z]]->p[un[z]];
-					tmp1_push(tmp1_b, tmp1_t);
+					tmp2_t.x = ((u8i)mykmer_vs[uj[z]]->i[un[z]] << 32) | mykmer_vs[uj[z]]->p[un[z]];
+					tmp2_t.y = tmp3_v->buffer[ui].y;
+					tmp2_push(tmp2_b, tmp2_t);
 				}
 				uj[0] = uj[1] = 0;
-				while(uj[0] < tmp1_a->size && uj[1] < tmp1_b->size)
+				while(uj[0] < tmp2_a->size && uj[1] < tmp2_b->size)
 				{
-					if(tmp1_a->buffer[uj[0]].s < tmp1_b->buffer[uj[1]].s)
+					if((tmp2_a->buffer[uj[0]].x == tmp2_b->buffer[uj[1]].x) || (tmp2_a->buffer[uj[0]].x + 1 == tmp2_b->buffer[uj[1]].x) || (tmp2_a->buffer[uj[0]].x == tmp2_b->buffer[uj[1]].x + 1))
+					{
+						tmp2_push(tmp2_v, tmp2_a->buffer[uj[0]]);
+						tmp2_push(tmp2_v, tmp2_b->buffer[uj[1]]);
+					}
+					if(tmp2_a->buffer[uj[0]].x < tmp2_b->buffer[uj[1]].x)
 					{
 						uj[0]++;
 					}
-					else if(tmp1_a->buffer[uj[0]].s > tmp1_b->buffer[uj[1]].s)
+					else if(tmp2_a->buffer[uj[0]].x > tmp2_b->buffer[uj[1]].x)
 					{
 						uj[1]++;
 					}
 					else
 					{
-						tmp1_push(tmp1_v, tmp1_a->buffer[uj[0]]);
 						uj[0]++;
 						uj[1]++;
 					}
@@ -1171,20 +1346,90 @@ void tmp1_to_tmp2_two(struct TMP1_V *tmp1_v, struct TMP2_V *tmp2_v, b4i bj)
 	tmp1_v->size = 0;
 }
 
-void put_tmp2(struct TMP2_V *tmp2_v, u8i outn, FILE *outfp, char *seqtagstring, u8i bj, u8i *mask)
+u4i get_tmp4_kcnt(struct TMP1_V *tmp1_v)
+{
+	u4i kcnt = 1;
+	u8i ui;
+	if(tmp1_v->size > 1)
+	{
+		sort_tmp1_s(tmp1_v, 0, tmp1_v->size - 1);
+	}
+	for(ui = 1; ui < tmp1_v->size; ui++)
+	{
+		if(tmp1_v->buffer[ui - 1].s != tmp1_v->buffer[ui].s)
+		{
+			kcnt++;
+		}
+	}
+	return kcnt;
+}
+
+void tmp2_to_tmp4(struct TMP2_V *tmp2_v, b4i bgap, struct TMP4_V *tmp4_v, struct TMP1_V *tmp1_v, u8i mask3)
+{
+	if(tmp2_v->size == 0)
+	{
+		return;
+	}
+	u8i ub, ue;
+	struct TMP1_T tmp1_t;
+	struct TMP4_T tmp4_t;
+	ub = 0;
+	tmp4_t.i = (tmp2_v->buffer[ub].x >> 32) & mask3;
+	tmp4_t.bbeg = tmp2_v->buffer[ub].x & mask3;
+	tmp1_v->size = 0;
+	tmp1_t.s = tmp2_v->buffer[ub].y;
+	tmp1_push(tmp1_v, tmp1_t);
+	for(ue = 1; ue < tmp2_v->size; ue++)
+	{
+		if(tmp4_t.i == ((tmp2_v->buffer[ue].x >> 32) & mask3) && (tmp2_v->buffer[ue].x & mask3) <= (bgap + (tmp2_v->buffer[ue - 1].x & mask3) + 1))
+		{
+			tmp1_t.s = tmp2_v->buffer[ue].y;
+			tmp1_push(tmp1_v, tmp1_t);
+		}
+		else
+		{
+			tmp4_t.kcnt = get_tmp4_kcnt(tmp1_v);
+			tmp4_t.blen = tmp2_v->buffer[ue - 1].x - tmp2_v->buffer[ub].x + 1;
+			tmp4_push(tmp4_v, tmp4_t);
+			ub = ue;
+			tmp4_t.i = (tmp2_v->buffer[ub].x >> 32) & mask3;
+			tmp4_t.bbeg = tmp2_v->buffer[ub].x & mask3;
+			tmp1_v->size = 0;
+			tmp1_t.s = tmp2_v->buffer[ub].y;
+			tmp1_push(tmp1_v, tmp1_t);
+		}
+	}
+	tmp4_t.kcnt = get_tmp4_kcnt(tmp1_v);
+	tmp4_t.blen = tmp2_v->buffer[ue - 1].x - tmp2_v->buffer[ub].x + 1;
+	tmp4_push(tmp4_v, tmp4_t);
+	tmp2_v->size = 0;
+}
+
+void put_tmp2(struct TMP2_V *tmp2_v, u8i outn, FILE *outfp, char *seqtagstring, struct TMP0_V *tmp0_v, u8i bj, u8i *mask)
 {
 	u8i ui, uj, uk;
-	fprintf(outfp, "%s %llu %llu %llu\n", seqtagstring, tmp2_v->buffer[0].x >> 32, (tmp2_v->buffer[0].x & mask[3]) << mask[6], tmp2_v->buffer[0].y);
+	fprintf(outfp, "%s %s %llu %llu\n", seqtagstring, tmp0_v->buffer[tmp2_v->buffer[0].x >> 32].name, (tmp2_v->buffer[0].x & mask[3]) << mask[6], tmp2_v->buffer[0].y);
 	uj = 1;
 	uk = tmp2_v->buffer[0].x;
 	for(ui = 1; ui < tmp2_v->size; ui = uj < outn || tmp2_v->buffer[ui].y == tmp2_v->buffer[0].y ? ui + 1 : tmp2_v->size)
 	{
 		if(tmp2_v->buffer[ui].x - uk + 1 > bj)
 		{
-			fprintf(outfp, "%s %llu %llu %llu\n", seqtagstring, tmp2_v->buffer[ui].x >> 32, (tmp2_v->buffer[ui].x & mask[3]) << mask[6], tmp2_v->buffer[ui].y);
+			fprintf(outfp, "%s %s %llu %llu\n", seqtagstring, tmp0_v->buffer[tmp2_v->buffer[ui].x >> 32].name, (tmp2_v->buffer[ui].x & mask[3]) << mask[6], tmp2_v->buffer[ui].y);
 			uj++;
 			uk = tmp2_v->buffer[ui].x;
 		}
 	}
 	tmp2_v->size = 0;
+}
+
+void put_tmp4(struct TMP4_V *tmp4_v, u8i outn, FILE *outfp, char *seqtagstring, struct TMP0_V *tmp0_v, u8i mask6)
+{
+	u8i ui;
+	for(ui = 0; ui < tmp4_v->size && ui < outn; ui++)
+	{
+		//fprintf(outfp, "%s %s %u %u %f\n", seqtagstring, tmp0_v->buffer[tmp4_v->buffer[ui].i].name, tmp4_v->buffer[ui].pb << mask6, tmp4_v->buffer[ui].pe << mask6, tmp4_v->buffer[ui].avg);
+		fprintf(outfp, "%s %s %u %u %u %u\n", seqtagstring, tmp0_v->buffer[tmp4_v->buffer[ui].i].name, tmp4_v->buffer[ui].bbeg << mask6, (tmp4_v->buffer[ui].bbeg + tmp4_v->buffer[ui].blen) << mask6, tmp4_v->buffer[ui].kcnt, tmp4_v->buffer[ui].blen);
+	}
+	tmp4_v->size = 0;
 }

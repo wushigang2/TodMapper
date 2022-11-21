@@ -1,5 +1,5 @@
-VERSION=1.0.6
-RELEASE=20221018
+VERSION=1.0.7
+RELEASE=20221121
 
 CC  := gcc
 BIN := /usr/local/bin
