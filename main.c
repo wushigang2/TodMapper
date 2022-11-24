@@ -19,6 +19,7 @@ int usage_map()
 	"usage: TodMapper map [options] <input file>\n"
 	" -q <string> multi sequence file, [NULL]\n"
 	" -r <string> genome file, [NULL]\n"
+	" -Q <string> the second multi sequence file, [NULL]\n"
 	" -o <string> output file, [NULL]\n"
 	" -k <int>    kmer size, [15]\n"
 	" -w <int>    window size, [10]\n"
@@ -35,15 +36,17 @@ int usage_map()
 	"\n"
 	"for example: map multi sequence qry.fa to genome ref.fa\n"
 	"TodMapper map -q qry.fa -r ref.fa -o output.txt\n"
+	"for example: calculate overlap of multi sequence qry.fa and the second multi sequence qry2.fa on genome ref.fa\n"
+	"TodMapper map -q qry.fa -Q qry2.fa -r ref.fa -o output.txt\n"
 	);
 	return 1;
 }
 
 int main_map(int argc, char **argv)
 {
-	FileReader *fr;
-	BioSequence *seq;
-	char **qryfn, **reffn;
+	FileReader *fr, *fr2;
+	BioSequence *seq, *seq2;
+	char **qryfn, **reffn, **qryfn2;
 	FILE *outfp;
 	char *outfn;
 	b4i c, ksize, wsize, bsize, kmax, bmin, mmin, mine, tope, outn, depth, bgap, ver, bi, bj;
@@ -58,12 +61,15 @@ int main_map(int argc, char **argv)
 	struct TMP1_V *tmp1_v;
 	struct TMP2_V *tmp2_v, *tmp2_a, *tmp2_b;
 	struct TMP3_V *tmp3_v;
-	struct TMP4_V *tmp4_v;
+	struct TMP4_V *tmp4_v, *tmp4_a, *tmp4_b;
+	struct TMP8_V *tmp8_v;
 	//
 	qryfn = (char **)malloc(sizeof(char *));
 	qryfn[0] = NULL;
 	reffn = (char **)malloc(sizeof(char *));
 	reffn[0] = NULL;
+	qryfn2 = (char **)malloc(sizeof(char *));
+	qryfn2[0] = NULL;
 	outfn = NULL;
 	ksize = 15;
 	wsize = 10;
@@ -77,7 +83,7 @@ int main_map(int argc, char **argv)
 	depth = 10;
 	bgap = 5;
 	ver = 0;
-	while((c = getopt(argc, argv, "hq:r:o:k:w:b:K:B:M:e:E:N:d:g:v")) != -1)
+	while((c = getopt(argc, argv, "hq:r:Q:o:k:w:b:K:B:M:e:E:N:d:g:v")) != -1)
 	{
 		switch(c)
 		{
@@ -86,6 +92,9 @@ int main_map(int argc, char **argv)
 				break;
 			case 'r':
 				reffn[0] = optarg;
+				break;
+			case 'Q':
+				qryfn2[0] = optarg;
 				break;
 			case 'o':
 				outfn = optarg;
@@ -189,8 +198,11 @@ int main_map(int argc, char **argv)
 	tmp2_v = (struct TMP2_V *)malloc(sizeof(struct TMP2_V));
 	tmp3_v = (struct TMP3_V *)malloc(sizeof(struct TMP3_V));
 	tmp4_v = (struct TMP4_V *)malloc(sizeof(struct TMP4_V));
-	tmp0_v->size = tmp1_v->size = tmp2_a->size = tmp2_b->size = tmp2_v->size = tmp3_v->size = tmp4_v->size = 0;
-	tmp0_v->cap = tmp1_v->cap = tmp2_a->cap = tmp2_b->cap = tmp2_v->cap = tmp3_v->cap = tmp4_v->cap = 0;
+	tmp4_a = (struct TMP4_V *)malloc(sizeof(struct TMP4_V));
+	tmp4_b = (struct TMP4_V *)malloc(sizeof(struct TMP4_V));
+	tmp8_v = (struct TMP8_V *)malloc(sizeof(struct TMP8_V));
+	tmp0_v->size = tmp1_v->size = tmp2_a->size = tmp2_b->size = tmp2_v->size = tmp3_v->size = tmp4_v->size = tmp4_a->size = tmp4_b->size = tmp8_v->size = 0;
+	tmp0_v->cap = tmp1_v->cap = tmp2_a->cap = tmp2_b->cap = tmp2_v->cap = tmp3_v->cap = tmp4_v->cap = tmp4_a->cap = tmp4_b->cap = tmp8_v->cap = 0;
 	//
 	clock_t start0, end0, sme0 = 0, start01, end01, sme01 = 0, start02, end02, sme02 = 0;
 	//clock_t start0, end0, sme0 = 0;
@@ -238,6 +250,89 @@ int main_map(int argc, char **argv)
 	fprintf(stderr, "total = %f sec.\n", usersys0);
 	//
 	outfp = fopen(outfn, "w");
+	if(qryfn2[0])
+	{
+		fr = open_all_filereader(1, qryfn, 0);
+		fr2 = open_all_filereader(1, qryfn2, 0);
+		free(qryfn);
+		free(qryfn2);
+		seq = init_biosequence();
+		seq2 = init_biosequence();
+		while(readseq_filereader(fr, seq))
+		{
+			get_tmp1(seq->seq->string, seq->seq->size, ksize, wsize, tmp1_v, nucleobase, mask);
+			tmp1_to_tmp2_one(tmp1_v, tmp2_v);
+			for(bi = 1; bi < depth; bi++)
+			{
+				readseq_filereader(fr, seq);
+				get_tmp1(seq->seq->string, seq->seq->size, ksize, wsize, tmp1_v, nucleobase, mask);
+				tmp1_to_tmp2_one(tmp1_v, tmp2_v);
+			}
+			if(tmp2_v->size > 1)
+			{
+				sort_tmp2_x_y(tmp2_v, 0, tmp2_v->size - 1);
+			}
+			tmp2_to_tmp3(tmp2_v, mine - 1, tmp3_v);
+			if(tmp3_v->size > 1)
+			{
+				sort_tmp3_cnt(tmp3_v, 0, tmp3_v->size - 1);
+			}
+			tmp3_to_tmp2(tmp3_v, kmax, tope, tmp2_v, tmp2_a, tmp2_b, mykmer_vs, mask);
+			if(tmp2_v->size > 1)
+			{
+				sort_tmp2_x(tmp2_v, 0, tmp2_v->size - 1);
+			}
+			tmp4_a->size = 0;
+			tmp2_to_tmp4(tmp2_v, bgap, tmp4_a, tmp1_v, mask[3]);
+			if(tmp4_a->size > 1)
+			{
+				sort_tmp4_kcnt_blen(tmp4_a, 0, tmp4_a->size - 1);
+			}
+			//
+			readseq_filereader(fr2, seq2);
+			get_tmp1(seq2->seq->string, seq2->seq->size, ksize, wsize, tmp1_v, nucleobase, mask);
+			tmp1_to_tmp2_one(tmp1_v, tmp2_v);
+			for(bi = 1; bi < depth; bi++)
+			{
+				readseq_filereader(fr2, seq2);
+				get_tmp1(seq2->seq->string, seq2->seq->size, ksize, wsize, tmp1_v, nucleobase, mask);
+				tmp1_to_tmp2_one(tmp1_v, tmp2_v);
+			}
+			if(tmp2_v->size > 1)
+			{
+				sort_tmp2_x_y(tmp2_v, 0, tmp2_v->size - 1);
+			}
+			tmp2_to_tmp3(tmp2_v, mine - 1, tmp3_v);
+			if(tmp3_v->size > 1)
+			{
+				sort_tmp3_cnt(tmp3_v, 0, tmp3_v->size - 1);
+			}
+			tmp3_to_tmp2(tmp3_v, kmax, tope, tmp2_v, tmp2_a, tmp2_b, mykmer_vs, mask);
+			if(tmp2_v->size > 1)
+			{
+				sort_tmp2_x(tmp2_v, 0, tmp2_v->size - 1);
+			}
+			tmp4_b->size = 0;
+			tmp2_to_tmp4(tmp2_v, bgap, tmp4_b, tmp1_v, mask[3]);
+			if(tmp4_b->size > 1)
+			{
+				sort_tmp4_kcnt_blen(tmp4_b, 0, tmp4_b->size - 1);
+			}
+			//
+			tmp4_to_tmp8(tmp4_a, tmp4_b, outn + 1, tmp8_v, mask[6]);
+			if(tmp8_v->size > 1)
+			{
+				sort_tmp8_kcnt_blen(tmp8_v, 0, tmp8_v->size - 1);
+			}
+			put_tmp8(tmp8_v, outfp, seq->tag->string, seq2->tag->string, tmp0_v);
+		}
+		free_biosequence(seq);
+		free_biosequence(seq2);
+		close_filereader(fr);
+		close_filereader(fr2);
+	}
+	else
+	{
 	clock_t start, end, sme = 0, start1, end1, sme1 = 0, start2, end2, sme2 = 0, start3, end3, sme3 = 0, start4, end4, sme4 = 0;
 	//clock_t start, end, sme = 0;
 	double usersys, usersys1, usersys2, usersys3, usersys4;
@@ -345,6 +440,7 @@ int main_map(int argc, char **argv)
 	fprintf(stderr, "step3 = %f sec.\n", usersys3);
 	fprintf(stderr, "step4 = %f sec.\n", usersys4);
 	fprintf(stderr, "total = %f sec.\n", usersys);
+	}
 	fclose(outfp);
 	//
 	for(ui = 0; ui < mask[5]; ui++)
@@ -435,6 +531,21 @@ int main_map(int argc, char **argv)
 		free(tmp4_v->buffer);
 	}
 	free(tmp4_v);
+	if(tmp4_a->buffer)
+	{
+		free(tmp4_a->buffer);
+	}
+	free(tmp4_a);
+	if(tmp4_b->buffer)
+	{
+		free(tmp4_b->buffer);
+	}
+	free(tmp4_b);
+	if(tmp8_v->buffer)
+	{
+		free(tmp8_v->buffer);
+	}
+	free(tmp8_v);
 	//
 	return 0;
 }

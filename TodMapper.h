@@ -811,6 +811,35 @@ void tmp4_push(struct TMP4_V *v, struct TMP4_T t)
 	v->buffer[v->size++] = t;
 }
 
+struct TMP8_T
+{
+	u4i i;
+	u4i beg1;
+	u4i end1;
+	u4i beg2;
+	u4i end2;
+	u4i blen;
+	u4i kcnt;
+	u4i ovl;
+};
+
+struct TMP8_V
+{
+	u8i size;
+	u8i cap;
+	struct TMP8_T *buffer;
+};
+
+void tmp8_push(struct TMP8_V *v, struct TMP8_T t)
+{
+	if(v->size == v->cap)
+	{
+		v->cap = v->cap ? v->cap << 1 : 2;
+		v->buffer = (struct TMP8_T *)realloc(v->buffer, sizeof(struct TMP8_T) * v->cap);
+	}
+	v->buffer[v->size++] = t;
+}
+
 void sort_tmp2_x_y(struct TMP2_V *tmp2_v, b4i beg, b4i end)
 {
 	b4i left, right;
@@ -1068,6 +1097,43 @@ void sort_tmp4_kcnt_blen(struct TMP4_V *tmp4_v, b4i beg, b4i end)
         {
                 sort_tmp4_kcnt_blen(tmp4_v, right + 1, end);
         }
+}
+
+void sort_tmp8_kcnt_blen(struct TMP8_V *tmp8_v, b4i beg, b4i end)
+{
+	b4i left, right;
+	struct TMP8_T tmp8_t;
+	left = beg;
+	right = end;
+	tmp8_t = tmp8_v->buffer[left];
+	while(left != right)
+	{
+		for(right = right; right > left; right--)
+		{
+			if((tmp8_v->buffer[right].kcnt > tmp8_t.kcnt) || (tmp8_v->buffer[right].kcnt == tmp8_t.kcnt && tmp8_v->buffer[right].blen < tmp8_t.blen))
+			{
+				tmp8_v->buffer[left] = tmp8_v->buffer[right];
+				break;
+			}
+		}
+		for(left = left; left < right; left++)
+		{
+			if((tmp8_v->buffer[left].kcnt < tmp8_t.kcnt) || (tmp8_v->buffer[left].kcnt == tmp8_t.kcnt && tmp8_v->buffer[left].blen > tmp8_t.blen))
+			{
+				tmp8_v->buffer[right] = tmp8_v->buffer[left];
+				break;
+			}
+		}
+	}
+	tmp8_v->buffer[left] = tmp8_t;
+	if(left - beg > 1)
+	{
+		sort_tmp8_kcnt_blen(tmp8_v, beg, left - 1);
+	}
+	if(end - right > 1)
+	{
+		sort_tmp8_kcnt_blen(tmp8_v, right + 1, end);
+	}
 }
 
 void get_tmp1(const char *seqseqstring, string_size_t seqseqsize, b4i ksize, b4i wsize, struct TMP1_V *tmp1_v, u1i *nucleobase, u8i *mask)
@@ -1403,6 +1469,7 @@ void tmp2_to_tmp4(struct TMP2_V *tmp2_v, b4i bgap, struct TMP4_V *tmp4_v, struct
 	tmp4_t.blen = tmp2_v->buffer[ue - 1].x - tmp2_v->buffer[ub].x + 1;
 	tmp4_push(tmp4_v, tmp4_t);
 	tmp2_v->size = 0;
+	tmp1_v->size = 0;
 }
 
 void put_tmp2(struct TMP2_V *tmp2_v, u8i outn, FILE *outfp, char *seqtagstring, struct TMP0_V *tmp0_v, u8i bj, u8i *mask)
@@ -1432,4 +1499,49 @@ void put_tmp4(struct TMP4_V *tmp4_v, u8i outn, FILE *outfp, char *seqtagstring, 
 		fprintf(outfp, "%s %s %u %u %u %u\n", seqtagstring, tmp0_v->buffer[tmp4_v->buffer[ui].i].name, tmp4_v->buffer[ui].bbeg << mask6, (tmp4_v->buffer[ui].bbeg + tmp4_v->buffer[ui].blen) << mask6, tmp4_v->buffer[ui].kcnt, tmp4_v->buffer[ui].blen);
 	}
 	tmp4_v->size = 0;
+}
+
+void tmp4_to_tmp8(struct TMP4_V *tmp4_a, struct TMP4_V *tmp4_b, u8i outn, struct TMP8_V *tmp8_v, u8i mask6)
+{
+	u4i beg, end;
+	u8i ui, uj;
+	struct TMP8_T tmp8_t;
+	tmp8_t.i = 0;
+	tmp8_t.beg1 = 0;
+	tmp8_t.end1 = 0;
+	tmp8_t.beg2 = 0;
+	tmp8_t.end2 = 0;
+	tmp8_t.kcnt = 0;
+	tmp8_t.blen = 0;
+	tmp8_t.ovl = 0;
+	tmp8_push(tmp8_v, tmp8_t);
+	for(ui = 0; ui < tmp4_a->size && ui < outn; ui++)
+	{
+		for(uj = 0; uj < tmp4_b->size && uj < outn; uj++)
+		{
+			if(tmp4_a->buffer[ui].i == tmp4_b->buffer[uj].i)
+			{
+				tmp8_t.i = tmp4_a->buffer[ui].i;
+				tmp8_t.beg1 = tmp4_a->buffer[ui].bbeg << mask6;
+				tmp8_t.end1 = (tmp4_a->buffer[ui].bbeg + tmp4_a->buffer[ui].blen) << mask6;
+				tmp8_t.beg2 = tmp4_b->buffer[uj].bbeg << mask6;
+				tmp8_t.end2 = (tmp4_b->buffer[uj].bbeg + tmp4_b->buffer[uj].blen) << mask6;
+				if(tmp8_t.beg1 < tmp8_t.end2 && tmp8_t.beg2 < tmp8_t.end1)
+				{
+					tmp8_t.kcnt = tmp4_a->buffer[ui].kcnt + tmp4_b->buffer[uj].kcnt;
+					tmp8_t.blen = tmp4_a->buffer[ui].blen + tmp4_b->buffer[uj].blen;
+					beg = tmp8_t.beg1 >= tmp8_t.beg2 ? tmp8_t.beg1 : tmp8_t.beg2;
+					end = tmp8_t.end1 <= tmp8_t.end2 ? tmp8_t.end1 : tmp8_t.end2;
+					tmp8_t.ovl = end - beg;
+					tmp8_push(tmp8_v, tmp8_t);
+				}
+			}
+		}
+	}
+}
+
+void put_tmp8(struct TMP8_V *tmp8_v, FILE *outfp, char *seqtagstring, char *seq2tagstring, struct TMP0_V *tmp0_v)
+{
+	fprintf(outfp, "%s %s %s %u %u %u %u %u %u %u\n", seqtagstring, seq2tagstring, tmp0_v->buffer[tmp8_v->buffer[0].i].name, tmp8_v->buffer[0].beg1, tmp8_v->buffer[0].end1, tmp8_v->buffer[0].beg2, tmp8_v->buffer[0].end2, tmp8_v->buffer[0].kcnt, tmp8_v->buffer[0].blen, tmp8_v->buffer[0].ovl);
+	tmp8_v->size = 0;
 }
