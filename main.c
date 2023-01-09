@@ -16,7 +16,7 @@ int main_cnt()
 int usage_map()
 {
 	fprintf(stdout,
-	"usage: TodMapper map [options] <input file>\n"
+	"usage: TodMapper map [options] -q <input file> [-Q <input file>] -r <input file> -o <output file>\n"
 	" -q <string> multi sequence file, [NULL]\n"
 	" -r <string> genome file, [NULL]\n"
 	" -Q <string> the second multi sequence file, [NULL]\n"
@@ -25,8 +25,6 @@ int usage_map()
 	" -w <int>    window size, [10]\n"
 	" -b <int>    bin size, [256]\n"
 	" -K <int>    filter high frequency minimizers, maybe repetitive, [4096]\n"
-	" -B <int>    min bins of a match read, [6]\n"
-	" -M <int>    min minimizers of a match bin, [1]\n"
 	" -e <int>    min minimizer depth of a valid edge, [2]\n"
 	" -E <int>    top minimizer depth of a valid edge, [128]\n"
 	" -N <int>    retain at most N secondary alignments, [9]\n"
@@ -559,7 +557,6 @@ int usage()
 	"usage  : TodMapper <cmd> [options]\n"
 	"\n"
 	"commands:\n"
-	" cnt      cnt a file\n"
 	" map      map a file\n"
 	, TOSTR(VERSION)
 	);
